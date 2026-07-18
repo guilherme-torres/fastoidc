@@ -53,9 +53,14 @@ async def callback(request: Request, response: Response):
     return {"state": callback_response.app_state}
 
 @app.get("/auth/me")
-async def me(session: DeltaSession = Depends(fast_delta.get_session)):
+async def me(session: DeltaSession = Depends(fast_delta.require_session)):
     user_info = session.user_info
     return {
         "name": user_info.name,
         "email": user_info.email,
     }
+
+@app.get("/auth/logout")
+async def logout(request: Request, response: Response):
+    await fast_delta.logout(request, response)
+    return {"message": "Desconectado com sucesso!"}

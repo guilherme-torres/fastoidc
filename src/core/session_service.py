@@ -62,3 +62,6 @@ class DeltaSessionService:
 
         await self._session_store.update(session)
         return session
+
+    async def delete(self, session_id: str):
+        await self._session_store.delete(session_id)

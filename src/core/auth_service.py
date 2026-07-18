@@ -100,7 +100,6 @@ class DeltaAuthService:
             auth_code=code,
             code_verifier=login_session_data.get("code_verifier"),
         )
-        print("tokens: ", tokens)
 
         user_info = self._token_validator.validate(tokens.id_token)
 
@@ -134,15 +133,12 @@ class DeltaAuthService:
                 if session and session.access_token_expires_at > datetime.now(timezone.utc):
                     return session
                 
-                print("fazendo refresh...")
                 tokens = await self._delta_client.refresh_tokens(session.refresh_token)
-                print("novos tokens: ", tokens)
                 
                 user_info = session.user_info
                 if tokens.id_token:
                     user_info = self._token_validator.validate(tokens.id_token)
-                print("user info: ", user_info)
-                print("atualizando sessão...")
+
                 session = await self._session_service.update(
                     session_id=session.id,
                     tokens=tokens,
@@ -150,3 +146,6 @@ class DeltaAuthService:
                 )
                 
         return session
+
+    async def logout(self, session_id: str):
+        await self._session_service.delete(session_id)

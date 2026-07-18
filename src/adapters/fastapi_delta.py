@@ -97,11 +97,30 @@ class FastDelta:
     async def get_session(self, request: Request):
         session_id = request.cookies.get("sid")
         if not session_id:
-            raise HTTPException(status_code=401, detail="Session cookie not found")
+            return None
             
         try:
             return await self._auth_service.get_session(session_id)
-        except AuthenticationError as e:
-            raise HTTPException(status_code=401, detail=str(e))
+        except AuthenticationError:
+            return None
         except DeltaError:
             raise HTTPException(status_code=500, detail="Internal server error")
+
+
+    async def require_session(self, request: Request):
+        session = await self.get_session(request)
+        if not session:
+            raise HTTPException(status_code=401, detail="Valid session required")
+        return session
+
+
+    async def logout(self, request: Request, response: Response):
+        session_id = request.cookies.get("sid")
+        if session_id:
+            await self._auth_service.logout(session_id)
+        response.delete_cookie(
+            key="sid",
+            secure=True,
+            httponly=True,
+            samesite="lax",
+        )
