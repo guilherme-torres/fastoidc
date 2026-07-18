@@ -1,13 +1,18 @@
+from dataclasses import asdict
 from typing import Any, Dict
 
-from fastapi import HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi import HTTPException, Request, Response
+from fastapi.responses import RedirectResponse, JSONResponse
+from jwt import PyJWKClient
 import redis.asyncio as redis
 
 from core.auth_service import DeltaAuthService
 from core.delta_client import DeltaClient
 from core.exceptions import DeltaError, AuthenticationError
 from core.models import DeltaSettings
+from core.ports.session_store import DeltaSessionStore
+from core.session_service import DeltaSessionService
+from core.token_validator import TokenValidator
 
 
 class FastDelta:
@@ -15,10 +20,22 @@ class FastDelta:
         self,
         settings: DeltaSettings,
         redis_client: redis.Redis,
+        session_store: DeltaSessionStore,
     ):
+        self._token_validator = TokenValidator(
+            jwk_client=PyJWKClient(settings.jwks_endpoint, cache_keys=True, lifespan=3600),
+            issuer=settings.issuer,
+            audience=settings.audience if settings.audience is not None else settings.client_id,
+        )
+        self._session_service = DeltaSessionService(
+            session_store=session_store,
+            session_ttl_seconds=settings.session_ttl_seconds,
+        )
         self._auth_service = DeltaAuthService(
             delta_client=DeltaClient(settings),
             redis_client=redis_client,
+            token_validator=self._token_validator,
+            session_service=self._session_service,
         )
 
 
@@ -43,7 +60,7 @@ class FastDelta:
         return response
 
 
-    async def callback(self, request: Request):
+    async def callback(self, request: Request, response: Response):
         code = request.query_params.get("code")
         state = request.query_params.get("state")
 
@@ -65,5 +82,26 @@ class FastDelta:
             raise HTTPException(status_code=401, detail=str(e))
         except DeltaError:
             raise HTTPException(status_code=500, detail="Internal server error")
-        
+
+        response.set_cookie(
+            key="sid",
+            value=callback_response.session_id,
+            secure=True,
+            httponly=True,
+            samesite="lax",
+        )
+
         return callback_response
+
+
+    async def get_session(self, request: Request):
+        session_id = request.cookies.get("sid")
+        if not session_id:
+            raise HTTPException(status_code=401, detail="Session cookie not found")
+            
+        try:
+            return await self._auth_service.get_session(session_id)
+        except AuthenticationError as e:
+            raise HTTPException(status_code=401, detail=str(e))
+        except DeltaError:
+            raise HTTPException(status_code=500, detail="Internal server error")

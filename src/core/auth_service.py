@@ -1,14 +1,17 @@
 import base64
 import hashlib
 import json
+from datetime import datetime, timezone
 from secrets import token_urlsafe, token_hex
 from typing import Any, Dict
 
 import redis.asyncio as redis
 
 from core.delta_client import DeltaClient
-from core.exceptions import LoginSessionExpiredError, InvalidStateError
+from core.exceptions import LoginSessionExpiredError, InvalidStateError, SessionNotFoundError
 from core.models import DeltaCallbackResponse, DeltaLoginResponse
+from core.session_service import DeltaSessionService
+from core.token_validator import TokenValidator
 from utils.hashing import hash_string
 
 
@@ -27,9 +30,13 @@ class DeltaAuthService:
         self,
         delta_client: DeltaClient,
         redis_client: redis.Redis,
+        token_validator: TokenValidator,
+        session_service: DeltaSessionService,
     ):
         self._delta_client = delta_client
         self._redis_client = redis_client
+        self._token_validator = token_validator
+        self._session_service = session_service
         self._login_session_ttl = 600
 
     
@@ -93,8 +100,53 @@ class DeltaAuthService:
             auth_code=code,
             code_verifier=login_session_data.get("code_verifier"),
         )
+        print("tokens: ", tokens)
+
+        user_info = self._token_validator.validate(tokens.id_token)
+
+        session = await self._session_service.create(
+            tokens=tokens,
+            user_info=user_info,
+            metadata=None,
+        )
         
         return DeltaCallbackResponse(
-            tokens=tokens,
+            session_id=session.id,
+            user_info=user_info,
             app_state=login_session_data.get("app_state"),
         )
+    
+
+    async def get_session(self, session_id: str):
+        session = await self._session_service.get(session_id)
+        if not session:
+            raise SessionNotFoundError("Session not found")
+
+        now = datetime.now(timezone.utc)
+        if session.access_token_expires_at <= now:
+            if not session.refresh_token:
+                raise LoginSessionExpiredError("Session expired and no refresh token available")
+
+            lock_key = f"lock:refresh_session:{session_id}"
+            
+            async with self._redis_client.lock(lock_key, timeout=10.0, blocking_timeout=5.0):
+                session = await self._session_service.get(session_id)
+                if session and session.access_token_expires_at > datetime.now(timezone.utc):
+                    return session
+                
+                print("fazendo refresh...")
+                tokens = await self._delta_client.refresh_tokens(session.refresh_token)
+                print("novos tokens: ", tokens)
+                
+                user_info = session.user_info
+                if tokens.id_token:
+                    user_info = self._token_validator.validate(tokens.id_token)
+                print("user info: ", user_info)
+                print("atualizando sessão...")
+                session = await self._session_service.update(
+                    session_id=session.id,
+                    tokens=tokens,
+                    user_info=user_info
+                )
+                
+        return session

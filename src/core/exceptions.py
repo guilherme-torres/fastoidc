@@ -20,3 +20,7 @@ class OAuthError(AuthenticationError):
 
 class DeltaInternalError(DeltaError):
     pass
+
+
+class SessionNotFoundError(AuthenticationError):
+    pass

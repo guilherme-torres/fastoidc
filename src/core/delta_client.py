@@ -55,8 +55,39 @@ class DeltaClient:
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
                     data=payload,
                 )
-                data = response.json()
                 response.raise_for_status()
+                data = response.json()
+                return DeltaTokensResponse(
+                    access_token=data.get("access_token"),
+                    refresh_token=data.get("refresh_token"),
+                    scope=data.get("scope"),
+                    id_token=data.get("id_token"),
+                    token_type=data.get("token_type"),
+                    expires_in=data.get("expires_in"),
+                )
+        except httpx.HTTPStatusError as e:
+            raise OAuthError(f"OAuth request failed: {e}") from e
+        except httpx.RequestError as e:
+            raise DeltaInternalError(f"Delta API connection error: {e}") from e
+    
+
+    async def refresh_tokens(self, refresh_token: str):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url=self._settings.token_endpoint,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": refresh_token,
+                    },
+                    auth=httpx.BasicAuth(
+                        username=self._settings.client_id,
+                        password=self._settings.client_secret,
+                    ),
+                )
+                response.raise_for_status()
+                data = response.json()
                 return DeltaTokensResponse(
                     access_token=data.get("access_token"),
                     refresh_token=data.get("refresh_token"),
