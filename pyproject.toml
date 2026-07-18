@@ -10,6 +10,12 @@ dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
     "pyjwt>=2.13.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
     "redis>=8.0.1",
     "uvicorn>=0.51.0",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
