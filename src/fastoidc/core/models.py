@@ -4,7 +4,8 @@ from typing import Any, Dict
 
 
 @dataclass
-class DeltaSettings:
+class OIDCSettings:
+    """Configuration settings required to interact with the FastOIDC OIDC provider."""
     client_id: str
     client_secret: str
     redirect_uri: str
@@ -18,7 +19,8 @@ class DeltaSettings:
 
 
 @dataclass
-class DeltaTokensResponse:
+class OIDCTokensResponse:
+    """Token response schema returned by the FastOIDC token endpoint."""
     access_token: str
     id_token: str
     token_type: str
@@ -28,14 +30,16 @@ class DeltaTokensResponse:
 
 
 @dataclass
-class DeltaLoginResponse:
+class OIDCLoginResponse:
+    """Response data containing login URL and session ID to initiate login flow."""
     login_url: str
     login_session_id: str
     login_session_ttl: int
 
 
 @dataclass
-class DeltaUserInfo:
+class OIDCUserInfo:
+    """User profile information extracted and validated from the ID token."""
     sub: str
     username: str | None = None
     email: str | None = None
@@ -46,7 +50,8 @@ class DeltaUserInfo:
 
 
 @dataclass
-class DeltaSession:
+class OIDCSession:
+    """Represents an active user session, storing associated tokens and validation states."""
     id: str
     access_token: str
     refresh_token: str | None
@@ -54,12 +59,13 @@ class DeltaSession:
     access_token_expires_at: datetime
     token_type: str
     scope: str
-    user_info: DeltaUserInfo | None
+    user_info: OIDCUserInfo | None
     metadata: dict[str, Any] | None = None
 
 
 @dataclass
-class DeltaCallbackResponse:
+class OIDCCallbackResponse:
+    """Data returned after successfully processing the authentication callback."""
     session_id: str
-    user_info: DeltaUserInfo
+    user_info: OIDCUserInfo
     app_state: Dict[str, Any] | None

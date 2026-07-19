@@ -1,6 +1,6 @@
 import pytest
 
-from utils.hashing import hash_string
+from fastoidc.utils.hashing import hash_string
 
 
 def test_hash_string_returns_hex_string():

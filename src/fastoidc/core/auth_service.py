@@ -7,33 +7,38 @@ from typing import Any, Dict
 
 import redis.asyncio as redis
 
-from core.delta_client import DeltaClient
-from core.exceptions import LoginSessionExpiredError, InvalidStateError, SessionNotFoundError
-from core.models import DeltaCallbackResponse, DeltaLoginResponse
-from core.session_service import DeltaSessionService
-from core.token_validator import TokenValidator
-from utils.hashing import hash_string
+from fastoidc.core.oidc_client import OIDCClient
+from fastoidc.core.exceptions import LoginSessionExpiredError, InvalidStateError, SessionNotFoundError
+from fastoidc.core.models import OIDCCallbackResponse, OIDCLoginResponse
+from fastoidc.core.session_service import OIDCSessionService
+from fastoidc.core.token_validator import TokenValidator
+from fastoidc.utils.hashing import hash_string
 
 
 class PKCE():
+    """Helper class for generating PKCE (Proof Key for Code Exchange) code verifiers and challenges."""
     def generate_code_verifier(self) -> str:
+        """Generates a secure cryptographically random code verifier string."""
         return token_hex(64)
     
     def get_code_challenge(self, code_verifier: str) -> str:
+        """Derives the SHA-256 code challenge from a given code verifier."""
         return base64.urlsafe_b64encode(
             hashlib.sha256(code_verifier.encode("ascii")).digest()
         ).decode("ascii").rstrip("=")
 
 
-class DeltaAuthService:
+class OIDCAuthService:
+    """Service orchestration class handling OIDC login, callback, session fetching, and logout."""
     def __init__(
         self,
-        delta_client: DeltaClient,
+        oidc_client: OIDCClient,
         redis_client: redis.Redis,
         token_validator: TokenValidator,
-        session_service: DeltaSessionService,
+        session_service: OIDCSessionService,
     ):
-        self._delta_client = delta_client
+        """Initializes the authentication service with FastOIDC client, Redis, token validator, and session service."""
+        self._oidc_client = oidc_client
         self._redis_client = redis_client
         self._token_validator = token_validator
         self._session_service = session_service
@@ -45,6 +50,7 @@ class DeltaAuthService:
         login_hint: str | None = None,
         app_state: Dict[str, Any] | None = None,
     ):
+        """Initiates the login flow by generating login URLs, PKCE codes, and storing login session data in Redis."""
         login_session_id = token_urlsafe(64)
         csrf_token = token_urlsafe(64)
 
@@ -52,7 +58,7 @@ class DeltaAuthService:
         code_verifier = pkce.generate_code_verifier()
         code_challenge = pkce.get_code_challenge(code_verifier)
 
-        login_url = self._delta_client.get_login_url(
+        login_url = self._oidc_client.get_login_url(
             login_hint=login_hint,
             state=csrf_token,
             code_challenge=code_challenge,
@@ -70,7 +76,7 @@ class DeltaAuthService:
             ex=self._login_session_ttl,
         )
 
-        return DeltaLoginResponse(
+        return OIDCLoginResponse(
             login_url=login_url,
             login_session_id=login_session_id,
             login_session_ttl=self._login_session_ttl,
@@ -83,6 +89,7 @@ class DeltaAuthService:
         state: str,
         login_session_id: str
     ):
+        """Handles OIDC callback parameters, validates state and PKCE, and constructs the user session."""
         session_key = hash_string(login_session_id)
         login_session_data_raw = await self._redis_client.get(session_key)
         
@@ -96,7 +103,7 @@ class DeltaAuthService:
             
         await self._redis_client.delete(session_key)
         
-        tokens = await self._delta_client.get_tokens(
+        tokens = await self._oidc_client.get_tokens(
             auth_code=code,
             code_verifier=login_session_data.get("code_verifier"),
         )
@@ -109,7 +116,7 @@ class DeltaAuthService:
             metadata=None,
         )
         
-        return DeltaCallbackResponse(
+        return OIDCCallbackResponse(
             session_id=session.id,
             user_info=user_info,
             app_state=login_session_data.get("app_state"),
@@ -117,6 +124,7 @@ class DeltaAuthService:
     
 
     async def get_session(self, session_id: str):
+        """Retrieves and returns the session, automatically refreshing tokens if the session has expired."""
         session = await self._session_service.get(session_id)
         if not session:
             raise SessionNotFoundError("Session not found")
@@ -133,7 +141,7 @@ class DeltaAuthService:
                 if session and session.access_token_expires_at > datetime.now(timezone.utc):
                     return session
                 
-                tokens = await self._delta_client.refresh_tokens(session.refresh_token)
+                tokens = await self._oidc_client.refresh_tokens(session.refresh_token)
                 
                 user_info = session.user_info
                 if tokens.id_token:
@@ -148,4 +156,5 @@ class DeltaAuthService:
         return session
 
     async def logout(self, session_id: str):
+        """Deletes the active session to perform a user logout."""
         await self._session_service.delete(session_id)

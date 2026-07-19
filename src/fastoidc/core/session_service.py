@@ -2,28 +2,32 @@ from datetime import datetime, timedelta, timezone
 from secrets import token_hex
 from typing import Any, Dict
 
-from core.models import DeltaSession, DeltaTokensResponse, DeltaUserInfo
-from core.ports.session_store import DeltaSessionStore
+from fastoidc.core.models import OIDCSession, OIDCTokensResponse, OIDCUserInfo
+from fastoidc.core.ports.session_store import OIDCSessionStore
 
 
-class DeltaSessionService:
+class OIDCSessionService:
+    """Service for managing the lifecycle of FastOIDC sessions."""
+
     def __init__(
         self,
-        session_store: DeltaSessionStore,
+        session_store: OIDCSessionStore,
         session_ttl_seconds: int,
     ):
+        """Initializes the session service with the storage mechanism and session TTL."""
         self._session_store = session_store
         self._session_ttl_seconds = session_ttl_seconds
 
     async def create(
         self,
-        tokens: DeltaTokensResponse,
-        user_info: DeltaUserInfo,
+        tokens: OIDCTokensResponse,
+        user_info: OIDCUserInfo,
         metadata: Dict[str, Any] | None = None,
-    ) -> DeltaSession:
+    ) -> OIDCSession:
+        """Creates and stores a new session with the provided tokens and user info."""
         session_expires_at = datetime.now(timezone.utc) + timedelta(seconds=self._session_ttl_seconds)
         access_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
-        session = DeltaSession(
+        session = OIDCSession(
             id=token_hex(32),
             access_token=tokens.access_token,
             refresh_token=tokens.refresh_token,
@@ -37,15 +41,17 @@ class DeltaSessionService:
         await self._session_store.create(session)
         return session
     
-    async def get(self, session_id: str) -> DeltaSession | None:
+    async def get(self, session_id: str) -> OIDCSession | None:
+        """Retrieves an active session by its identifier."""
         return await self._session_store.get(session_id)
 
     async def update(
         self,
         session_id: str,
-        tokens: DeltaTokensResponse,
-        user_info: DeltaUserInfo | None = None,
-    ) -> DeltaSession:
+        tokens: OIDCTokensResponse,
+        user_info: OIDCUserInfo | None = None,
+    ) -> OIDCSession:
+        """Updates the tokens, expiration, and optionally user info of an active session."""
         session = await self.get(session_id)
         if not session:
             raise ValueError("Session not found")
@@ -64,4 +70,5 @@ class DeltaSessionService:
         return session
 
     async def delete(self, session_id: str):
+        """Deletes the session corresponding to the provided identifier."""
         await self._session_store.delete(session_id)

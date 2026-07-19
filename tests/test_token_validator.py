@@ -3,9 +3,9 @@ from unittest.mock import MagicMock, patch
 
 import jwt
 
-from core.exceptions import DeltaError
-from core.models import DeltaUserInfo
-from core.token_validator import TokenValidator
+from fastoidc.core.exceptions import OIDCError
+from fastoidc.core.models import OIDCUserInfo
+from fastoidc.core.token_validator import TokenValidator
 
 
 def _make_validator():
@@ -19,7 +19,7 @@ def _make_validator():
 
 def test_validate_raises_when_id_token_is_none():
     validator = _make_validator()
-    with pytest.raises(DeltaError, match="ID token was not returned"):
+    with pytest.raises(OIDCError, match="ID token was not returned"):
         validator.validate(None)
 
 
@@ -41,7 +41,7 @@ def test_validate_returns_user_info_on_valid_token():
     with patch("jwt.decode", return_value=claims):
         result = validator.validate("token-valido")
 
-    assert isinstance(result, DeltaUserInfo)
+    assert isinstance(result, OIDCUserInfo)
     assert result.sub == "user-123"
     assert result.email == "user@empresa.com"
     assert result.name == "Guilherme Torres"
@@ -55,7 +55,7 @@ def test_validate_raises_delta_error_on_jwt_error():
     validator = _make_validator()
     validator._jwk_client.get_signing_key_from_jwt.side_effect = jwt.PyJWTError("assinatura inválida")
 
-    with pytest.raises(DeltaError, match="Invalid or expired ID token"):
+    with pytest.raises(OIDCError, match="Invalid or expired ID token"):
         validator.validate("token-invalido")
 
 

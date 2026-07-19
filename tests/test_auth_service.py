@@ -4,23 +4,23 @@ import pytest_asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
-from core.auth_service import DeltaAuthService
-from core.exceptions import (
+from fastoidc.core.auth_service import OIDCAuthService
+from fastoidc.core.exceptions import (
     InvalidStateError,
     LoginSessionExpiredError,
     SessionNotFoundError,
 )
-from core.models import (
-    DeltaCallbackResponse,
-    DeltaLoginResponse,
-    DeltaSession,
-    DeltaTokensResponse,
-    DeltaUserInfo,
+from fastoidc.core.models import (
+    OIDCCallbackResponse,
+    OIDCLoginResponse,
+    OIDCSession,
+    OIDCTokensResponse,
+    OIDCUserInfo,
 )
-from utils.hashing import hash_string
+from fastoidc.utils.hashing import hash_string
 
 
-def _make_tokens(**overrides) -> DeltaTokensResponse:
+def _make_tokens(**overrides) -> OIDCTokensResponse:
     defaults = dict(
         access_token="access-token",
         id_token="id-token",
@@ -29,10 +29,10 @@ def _make_tokens(**overrides) -> DeltaTokensResponse:
         expires_in=3600,
         scope="openid profile",
     )
-    return DeltaTokensResponse(**{**defaults, **overrides})
+    return OIDCTokensResponse(**{**defaults, **overrides})
 
 
-def _make_session(**overrides) -> DeltaSession:
+def _make_session(**overrides) -> OIDCSession:
     defaults = dict(
         id="session-id",
         access_token="access-token",
@@ -41,18 +41,18 @@ def _make_session(**overrides) -> DeltaSession:
         access_token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         token_type="Bearer",
         scope="openid profile",
-        user_info=DeltaUserInfo(sub="user-123"),
+        user_info=OIDCUserInfo(sub="user-123"),
     )
-    return DeltaSession(**{**defaults, **overrides})
+    return OIDCSession(**{**defaults, **overrides})
 
 
-def _make_user_info(**overrides) -> DeltaUserInfo:
+def _make_user_info(**overrides) -> OIDCUserInfo:
     defaults = dict(sub="user-123", email="user@empresa.com")
-    return DeltaUserInfo(**{**defaults, **overrides})
+    return OIDCUserInfo(**{**defaults, **overrides})
 
 
 def _make_service(**overrides):
-    delta_client = MagicMock()
+    oidc_client = MagicMock()
     redis_client = AsyncMock()
     token_validator = MagicMock()
     session_service = AsyncMock()
@@ -60,13 +60,13 @@ def _make_service(**overrides):
     redis_client.lock = MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock(return_value=False)))
 
     defaults = dict(
-        delta_client=delta_client,
+        oidc_client=oidc_client,
         redis_client=redis_client,
         token_validator=token_validator,
         session_service=session_service,
     )
     kwargs = {**defaults, **overrides}
-    service = DeltaAuthService(**kwargs)
+    service = OIDCAuthService(**kwargs)
     return service, kwargs
 
 
@@ -74,12 +74,12 @@ class TestLogin:
     @pytest.mark.asyncio
     async def test_login_returns_login_response(self):
         service, deps = _make_service()
-        deps["delta_client"].get_login_url.return_value = "https://idp.empresa.com/auth?..."
+        deps["oidc_client"].get_login_url.return_value = "https://idp.empresa.com/auth?..."
         deps["redis_client"].set = AsyncMock()
 
         result = await service.login()
 
-        assert isinstance(result, DeltaLoginResponse)
+        assert isinstance(result, OIDCLoginResponse)
         assert result.login_url == "https://idp.empresa.com/auth?..."
         assert result.login_session_id is not None
         assert result.login_session_ttl == 600
@@ -87,7 +87,7 @@ class TestLogin:
     @pytest.mark.asyncio
     async def test_login_saves_session_to_redis(self):
         service, deps = _make_service()
-        deps["delta_client"].get_login_url.return_value = "https://idp.empresa.com/auth"
+        deps["oidc_client"].get_login_url.return_value = "https://idp.empresa.com/auth"
         deps["redis_client"].set = AsyncMock()
 
         await service.login()
@@ -101,7 +101,7 @@ class TestLogin:
     @pytest.mark.asyncio
     async def test_login_with_app_state_saves_it_to_redis(self):
         service, deps = _make_service()
-        deps["delta_client"].get_login_url.return_value = "https://idp.empresa.com/auth"
+        deps["oidc_client"].get_login_url.return_value = "https://idp.empresa.com/auth"
         deps["redis_client"].set = AsyncMock()
 
         await service.login(app_state={"redirect_to": "/dashboard"})
@@ -118,7 +118,7 @@ class TestCallback:
         deps["redis_client"].get = AsyncMock(return_value=None)
 
         with pytest.raises(LoginSessionExpiredError):
-            await service.callback(code="code", state="state", login_session_id="sid")
+            await service.callback(code="code", state="state", login_session_id="fastoidc_session")
 
     @pytest.mark.asyncio
     async def test_callback_raises_on_invalid_state(self):
@@ -128,7 +128,7 @@ class TestCallback:
         deps["redis_client"].delete = AsyncMock()
 
         with pytest.raises(InvalidStateError):
-            await service.callback(code="code", state="token-falso", login_session_id="sid")
+            await service.callback(code="code", state="token-falso", login_session_id="fastoidc_session")
 
     @pytest.mark.asyncio
     async def test_callback_returns_callback_response_on_success(self):
@@ -144,7 +144,7 @@ class TestCallback:
         deps["redis_client"].delete = AsyncMock()
 
         tokens = _make_tokens()
-        deps["delta_client"].get_tokens = AsyncMock(return_value=tokens)
+        deps["oidc_client"].get_tokens = AsyncMock(return_value=tokens)
 
         user_info = _make_user_info()
         deps["token_validator"].validate.return_value = user_info
@@ -154,7 +154,7 @@ class TestCallback:
 
         result = await service.callback(code="code", state=csrf_token, login_session_id="login-sid")
 
-        assert isinstance(result, DeltaCallbackResponse)
+        assert isinstance(result, OIDCCallbackResponse)
         assert result.session_id == session.id
         assert result.user_info == user_info
         assert result.app_state == {"next": "/home"}
@@ -167,7 +167,7 @@ class TestCallback:
         session_data = json.dumps({"csrf_token": csrf_token, "code_verifier": "verifier", "app_state": None})
         deps["redis_client"].get = AsyncMock(return_value=session_data)
         deps["redis_client"].delete = AsyncMock()
-        deps["delta_client"].get_tokens = AsyncMock(return_value=_make_tokens())
+        deps["oidc_client"].get_tokens = AsyncMock(return_value=_make_tokens())
         deps["token_validator"].validate.return_value = _make_user_info()
         deps["session_service"].create = AsyncMock(return_value=_make_session())
 
@@ -223,13 +223,13 @@ class TestGetSession:
         deps["session_service"].update = AsyncMock(return_value=refreshed_session)
 
         new_tokens = _make_tokens(access_token="novo-access-token", id_token=None)
-        deps["delta_client"].refresh_tokens = AsyncMock(return_value=new_tokens)
+        deps["oidc_client"].refresh_tokens = AsyncMock(return_value=new_tokens)
         deps["token_validator"].validate.return_value = expired_session.user_info
 
         result = await service.get_session("session-id")
 
         assert result == refreshed_session
-        deps["delta_client"].refresh_tokens.assert_called_once_with("refresh-token")
+        deps["oidc_client"].refresh_tokens.assert_called_once_with("refresh-token")
 
     @pytest.mark.asyncio
     async def test_get_session_skips_refresh_if_already_refreshed_inside_lock(self):
@@ -247,7 +247,7 @@ class TestGetSession:
         result = await service.get_session("session-id")
 
         assert result == already_refreshed_session
-        deps["delta_client"].refresh_tokens.assert_not_called()
+        deps["oidc_client"].refresh_tokens.assert_not_called()
 
 
 class TestLogout:

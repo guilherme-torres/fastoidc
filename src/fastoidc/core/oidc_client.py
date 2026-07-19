@@ -2,12 +2,15 @@ from urllib.parse import urlencode
 
 import httpx
 
-from core.exceptions import DeltaError, OAuthError, DeltaInternalError
-from core.models import DeltaSettings, DeltaTokensResponse
+from fastoidc.core.exceptions import OAuthError, OIDCInternalError
+from fastoidc.core.models import OIDCSettings, OIDCTokensResponse
 
 
-class DeltaClient:
-    def __init__(self, settings: DeltaSettings):
+class OIDCClient:
+    """HTTP client to perform direct OIDC queries and calls to the FastOIDC authorization server."""
+
+    def __init__(self, settings: OIDCSettings):
+        """Initializes the FastOIDC client with endpoint configurations and credentials."""
         self._settings = settings
 
 
@@ -18,6 +21,7 @@ class DeltaClient:
         login_hint: str | None = None,
         state: str | None = None,
     ) -> str:
+        """Generates the authorization URL to initiate the OIDC authorization code flow."""
         url_params = {
             "response_type": "code",
             "client_id": self._settings.client_id,
@@ -39,6 +43,7 @@ class DeltaClient:
         auth_code: str,
         code_verifier: str | None = None,
     ):
+        """Exchanges an authorization code for access, ID, and refresh tokens."""
         payload = {
             "code": auth_code,
             "grant_type": "authorization_code",
@@ -57,7 +62,7 @@ class DeltaClient:
                 )
                 response.raise_for_status()
                 data = response.json()
-                return DeltaTokensResponse(
+                return OIDCTokensResponse(
                     access_token=data.get("access_token"),
                     refresh_token=data.get("refresh_token"),
                     scope=data.get("scope"),
@@ -68,10 +73,11 @@ class DeltaClient:
         except httpx.HTTPStatusError as e:
             raise OAuthError(f"OAuth request failed: {e}") from e
         except httpx.RequestError as e:
-            raise DeltaInternalError(f"Delta API connection error: {e}") from e
+            raise OIDCInternalError(f"FastOIDC API connection error: {e}") from e
     
 
     async def refresh_tokens(self, refresh_token: str):
+        """Uses a refresh token to obtain a new set of active tokens."""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -88,7 +94,7 @@ class DeltaClient:
                 )
                 response.raise_for_status()
                 data = response.json()
-                return DeltaTokensResponse(
+                return OIDCTokensResponse(
                     access_token=data.get("access_token"),
                     refresh_token=data.get("refresh_token"),
                     scope=data.get("scope"),
@@ -99,4 +105,4 @@ class DeltaClient:
         except httpx.HTTPStatusError as e:
             raise OAuthError(f"OAuth request failed: {e}") from e
         except httpx.RequestError as e:
-            raise DeltaInternalError(f"Delta API connection error: {e}") from e
+            raise OIDCInternalError(f"FastOIDC API connection error: {e}") from e

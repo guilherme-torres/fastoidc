@@ -4,12 +4,12 @@ import pytest_asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
-from core.exceptions import SessionNotFoundError
-from core.models import DeltaSession, DeltaTokensResponse, DeltaUserInfo
-from core.session_service import DeltaSessionService
+from fastoidc.core.exceptions import SessionNotFoundError
+from fastoidc.core.models import OIDCSession, OIDCTokensResponse, OIDCUserInfo
+from fastoidc.core.session_service import OIDCSessionService
 
 
-def _make_tokens(**overrides) -> DeltaTokensResponse:
+def _make_tokens(**overrides) -> OIDCTokensResponse:
     defaults = dict(
         access_token="access-token",
         id_token="id-token",
@@ -18,10 +18,10 @@ def _make_tokens(**overrides) -> DeltaTokensResponse:
         expires_in=3600,
         scope="openid profile",
     )
-    return DeltaTokensResponse(**{**defaults, **overrides})
+    return OIDCTokensResponse(**{**defaults, **overrides})
 
 
-def _make_session(**overrides) -> DeltaSession:
+def _make_session(**overrides) -> OIDCSession:
     defaults = dict(
         id="session-id",
         access_token="access-token",
@@ -30,14 +30,14 @@ def _make_session(**overrides) -> DeltaSession:
         access_token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         token_type="Bearer",
         scope="openid profile",
-        user_info=DeltaUserInfo(sub="user-123"),
+        user_info=OIDCUserInfo(sub="user-123"),
     )
-    return DeltaSession(**{**defaults, **overrides})
+    return OIDCSession(**{**defaults, **overrides})
 
 
 def _make_service(session_ttl_seconds=3600):
     store = AsyncMock()
-    service = DeltaSessionService(session_store=store, session_ttl_seconds=session_ttl_seconds)
+    service = OIDCSessionService(session_store=store, session_ttl_seconds=session_ttl_seconds)
     return service, store
 
 
@@ -48,7 +48,7 @@ class TestCreate:
         store.create = AsyncMock()
 
         tokens = _make_tokens()
-        user_info = DeltaUserInfo(sub="user-123")
+        user_info = OIDCUserInfo(sub="user-123")
 
         result = await service.create(tokens=tokens, user_info=user_info)
 
@@ -60,7 +60,7 @@ class TestCreate:
         store.create = AsyncMock()
 
         tokens = _make_tokens(expires_in=60)
-        user_info = DeltaUserInfo(sub="user-123")
+        user_info = OIDCUserInfo(sub="user-123")
 
         before = datetime.now(timezone.utc)
         result = await service.create(tokens=tokens, user_info=user_info)
@@ -75,7 +75,7 @@ class TestCreate:
         store.create = AsyncMock()
 
         tokens = _make_tokens(access_token="meu-token", refresh_token="meu-refresh")
-        user_info = DeltaUserInfo(sub="user-abc")
+        user_info = OIDCUserInfo(sub="user-abc")
 
         result = await service.create(tokens=tokens, user_info=user_info)
 
@@ -149,7 +149,7 @@ class TestUpdate:
         store.get = AsyncMock(return_value=session)
         store.update = AsyncMock()
 
-        new_user_info = DeltaUserInfo(sub="user-novo", email="novo@empresa.com")
+        new_user_info = OIDCUserInfo(sub="user-novo", email="novo@empresa.com")
         result = await service.update(session_id="session-id", tokens=_make_tokens(), user_info=new_user_info)
 
         assert result.user_info == new_user_info
