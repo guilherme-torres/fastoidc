@@ -2,7 +2,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from fastoidc.core.exceptions import OAuthError, OIDCInternalError
+from fastoidc.exceptions import OAuthError, OIDCInternalError
 from fastoidc.core.models import OIDCSettings, OIDCTokensResponse
 
 

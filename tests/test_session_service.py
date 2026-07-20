@@ -4,7 +4,7 @@ import pytest_asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
-from fastoidc.core.exceptions import SessionNotFoundError
+from fastoidc.exceptions import SessionNotFoundError
 from fastoidc.core.models import OIDCSession, OIDCTokensResponse, OIDCUserInfo
 from fastoidc.core.session_service import OIDCSessionService
 

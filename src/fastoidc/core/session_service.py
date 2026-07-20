@@ -3,7 +3,7 @@ from secrets import token_hex
 from typing import Any, Dict
 
 from fastoidc.core.models import OIDCSession, OIDCTokensResponse, OIDCUserInfo
-from fastoidc.core.ports.session_store import OIDCSessionStore
+from fastoidc.stores import OIDCSessionStore
 
 
 class OIDCSessionService:

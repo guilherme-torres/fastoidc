@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 from fastoidc.core.auth_service import OIDCAuthService
-from fastoidc.core.exceptions import (
+from fastoidc.exceptions import (
     InvalidStateError,
     LoginSessionExpiredError,
     SessionNotFoundError,

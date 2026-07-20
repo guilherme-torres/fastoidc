@@ -7,8 +7,8 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from fastapi import FastAPI, Request, Response, Depends
 
-from fastoidc.adapters.fastapi_oidc import FastOIDC
-from fastoidc.core.exceptions import AuthenticationError, OIDCError, SessionNotFoundError
+from fastoidc.integration import FastOIDC
+from fastoidc.exceptions import AuthenticationError, OIDCError, SessionNotFoundError
 from fastoidc.core.models import OIDCSession, OIDCUserInfo
 
 
@@ -27,11 +27,11 @@ def _make_session(**overrides) -> OIDCSession:
 
 
 def _make_fast_oidc():
-    with patch("fastoidc.adapters.fastapi_oidc.PyJWKClient"), \
-         patch("fastoidc.adapters.fastapi_oidc.OIDCClient"), \
-         patch("fastoidc.adapters.fastapi_oidc.TokenValidator"), \
-         patch("fastoidc.adapters.fastapi_oidc.OIDCSessionService"), \
-         patch("fastoidc.adapters.fastapi_oidc.OIDCAuthService") as MockAuthService:
+    with patch("fastoidc.integration.PyJWKClient"), \
+         patch("fastoidc.integration.OIDCClient"), \
+         patch("fastoidc.integration.TokenValidator"), \
+         patch("fastoidc.integration.OIDCSessionService"), \
+         patch("fastoidc.integration.OIDCAuthService") as MockAuthService:
 
         from fastoidc.core.models import OIDCSettings
 

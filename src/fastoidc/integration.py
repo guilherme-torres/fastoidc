@@ -1,16 +1,15 @@
-from dataclasses import asdict
 from typing import Any, Dict
 
 from fastapi import HTTPException, Request, Response
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse
 from jwt import PyJWKClient
 import redis.asyncio as redis
 
 from fastoidc.core.auth_service import OIDCAuthService
 from fastoidc.core.oidc_client import OIDCClient
-from fastoidc.core.exceptions import OIDCError, AuthenticationError
+from fastoidc.exceptions import OIDCError, AuthenticationError
 from fastoidc.core.models import OIDCSettings
-from fastoidc.core.ports.session_store import OIDCSessionStore
+from fastoidc.stores import OIDCSessionStore
 from fastoidc.core.session_service import OIDCSessionService
 from fastoidc.core.token_validator import TokenValidator
 
@@ -45,7 +44,7 @@ class FastOIDC:
     async def login(
         self,
         login_hint: str | None = None,
-        app_state: Dict[str, Any] | None = None,
+        app_state: Any = None,
     ):
         """Initiates the login flow, returning a redirect response and setting a temporary login cookie."""
         data = await self._auth_service.login(

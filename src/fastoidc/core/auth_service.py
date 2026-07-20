@@ -8,7 +8,7 @@ from typing import Any, Dict
 import redis.asyncio as redis
 
 from fastoidc.core.oidc_client import OIDCClient
-from fastoidc.core.exceptions import LoginSessionExpiredError, InvalidStateError, SessionNotFoundError
+from fastoidc.exceptions import LoginSessionExpiredError, InvalidStateError, SessionNotFoundError
 from fastoidc.core.models import OIDCCallbackResponse, OIDCLoginResponse
 from fastoidc.core.session_service import OIDCSessionService
 from fastoidc.core.token_validator import TokenValidator
@@ -48,7 +48,7 @@ class OIDCAuthService:
     async def login(
         self,
         login_hint: str | None = None,
-        app_state: Dict[str, Any] | None = None,
+        app_state: Any = None,
     ):
         """Initiates the login flow by generating login URLs, PKCE codes, and storing login session data in Redis."""
         login_session_id = token_urlsafe(64)

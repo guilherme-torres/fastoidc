@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import jwt
 
-from fastoidc.core.exceptions import OIDCError
+from fastoidc.exceptions import OIDCError
 from fastoidc.core.models import OIDCUserInfo
 from fastoidc.core.token_validator import TokenValidator
 

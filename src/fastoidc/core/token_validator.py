@@ -2,7 +2,7 @@ import jwt
 from jwt import PyJWKClient
 
 from fastoidc.core.models import OIDCUserInfo
-from fastoidc.core.exceptions import OIDCError
+from fastoidc.exceptions import OIDCError
 
 
 class TokenValidator:

@@ -68,4 +68,4 @@ class OIDCCallbackResponse:
     """Data returned after successfully processing the authentication callback."""
     session_id: str
     user_info: OIDCUserInfo
-    app_state: Dict[str, Any] | None
+    app_state: Any
