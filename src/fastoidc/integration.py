@@ -139,17 +139,27 @@ class FastOIDC:
         )
         return response
 
-    async def backchannel_logout(self, request: Request):
+    async def backchannel_logout(self, request: Request) -> Response:
         """Handles Back-Channel Logout notification from the IdP."""
         form = await request.form()
         logout_token = form.get("logout_token")
 
         if not logout_token:
-            raise HTTPException(status_code=400, detail="Missing logout_token")
+            # OAuth 2.0 error format
+            return Response(
+                content='{"error": "invalid_request", "error_description": "Missing logout_token"}',
+                status_code=400,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"}
+            )
 
         try:
             await self._auth_service.backchannel_logout(logout_token)
+            return Response(status_code=200, headers={"Cache-Control": "no-store"})
         except OIDCError:
-            raise HTTPException(status_code=400, detail="Invalid back-channel logout token")
-
-
+            return Response(
+                content='{"error": "invalid_request", "error_description": "Invalid back-channel logout token"}',
+                status_code=400,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"}
+            )

@@ -247,9 +247,11 @@ class TestBackchannelLogout:
         request = MagicMock()
         request.form = AsyncMock(return_value=form_mock)
 
-        await fast_oidc.backchannel_logout(request)
+        response = await fast_oidc.backchannel_logout(request)
 
         fast_oidc._auth_service.backchannel_logout.assert_called_once_with("valid-logout-token")
+        assert response.status_code == 200
+        assert response.headers.get("Cache-Control") == "no-store"
 
     @pytest.mark.asyncio
     async def test_backchannel_logout_raises_400_when_token_missing(self):
@@ -260,10 +262,11 @@ class TestBackchannelLogout:
         request = MagicMock()
         request.form = AsyncMock(return_value=form_mock)
 
-        with pytest.raises(HTTPException) as exc_info:
-            await fast_oidc.backchannel_logout(request)
+        response = await fast_oidc.backchannel_logout(request)
 
-        assert exc_info.value.status_code == 400
+        assert response.status_code == 400
+        assert response.headers.get("Cache-Control") == "no-store"
+        assert b'"error"' in response.body
 
     @pytest.mark.asyncio
     async def test_backchannel_logout_raises_400_on_oidc_error(self):
@@ -277,7 +280,8 @@ class TestBackchannelLogout:
         request = MagicMock()
         request.form = AsyncMock(return_value=form_mock)
 
-        with pytest.raises(HTTPException) as exc_info:
-            await fast_oidc.backchannel_logout(request)
+        response = await fast_oidc.backchannel_logout(request)
 
-        assert exc_info.value.status_code == 400
+        assert response.status_code == 400
+        assert response.headers.get("Cache-Control") == "no-store"
+        assert b'"error"' in response.body
