@@ -76,8 +76,7 @@ async def logout(request: Request):
 @app.post("/auth/backchannel_logout")
 async def backchannel_logout(request: Request):
     # Receives the background logout notification from the IdP
-    await auth.backchannel_logout(request)
-    return Response(status_code=200)
+    return await auth.backchannel_logout(request)
 
 # Authenticate your routes
 @app.get("/auth/me")
