@@ -106,3 +106,17 @@ class OIDCClient:
             raise OAuthError(f"OAuth request failed: {e}") from e
         except httpx.RequestError as e:
             raise OIDCInternalError(f"FastOIDC API connection error: {e}") from e
+
+
+    def get_logout_url(self, id_token_hint: str, state: str | None = None) -> str:
+        """Builds the URL for RP-Initiated Logout at the IdP."""
+        if not self._settings.logout_endpoint:
+            raise OIDCInternalError("logout_endpoint is not configured in OIDCSettings")
+
+        payload = {"id_token_hint": id_token_hint}
+        if self._settings.post_logout_redirect_uri:
+            payload["post_logout_redirect_uri"] = self._settings.post_logout_redirect_uri
+        if state:
+            payload["state"] = state
+
+        return f"{self._settings.logout_endpoint}?{urlencode(payload)}"

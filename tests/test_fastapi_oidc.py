@@ -208,36 +208,76 @@ class TestCallback:
 
 class TestLogout:
     @pytest.mark.asyncio
-    async def test_logout_deletes_session_and_cookie(self):
+    async def test_logout_redirects_and_deletes_session_and_cookie(self):
         fast_oidc = _make_fast_oidc()
-        fast_oidc._auth_service.logout = AsyncMock()
+        fast_oidc._auth_service.logout = AsyncMock(return_value="https://idp/logout")
 
         request = MagicMock()
         request.cookies = {"fastoidc_session": "session-id"}
-        response = MagicMock()
-        response.delete_cookie = MagicMock()
 
-        await fast_oidc.logout(request, response)
+        response = await fast_oidc.logout(request)
 
         fast_oidc._auth_service.logout.assert_called_once_with("session-id")
-        response.delete_cookie.assert_called_once_with(
-            key="fastoidc_session",
-            secure=True,
-            httponly=True,
-            samesite="lax",
-        )
+        assert response.status_code in (302, 303, 307)
+        assert response.headers["location"] == "https://idp/logout"
 
     @pytest.mark.asyncio
-    async def test_logout_only_deletes_cookie_when_no_session(self):
+    async def test_logout_redirects_to_root_when_no_session(self):
         fast_oidc = _make_fast_oidc()
         fast_oidc._auth_service.logout = AsyncMock()
 
         request = MagicMock()
         request.cookies = {}
-        response = MagicMock()
-        response.delete_cookie = MagicMock()
 
-        await fast_oidc.logout(request, response)
+        response = await fast_oidc.logout(request)
 
         fast_oidc._auth_service.logout.assert_not_called()
-        response.delete_cookie.assert_called_once()
+        assert response.status_code in (302, 303, 307)
+        assert response.headers["location"] == "/"
+
+
+class TestBackchannelLogout:
+    @pytest.mark.asyncio
+    async def test_backchannel_logout_processes_valid_token(self):
+        fast_oidc = _make_fast_oidc()
+        fast_oidc._auth_service.backchannel_logout = AsyncMock()
+
+        form_mock = MagicMock()
+        form_mock.get = MagicMock(return_value="valid-logout-token")
+        request = MagicMock()
+        request.form = AsyncMock(return_value=form_mock)
+
+        await fast_oidc.backchannel_logout(request)
+
+        fast_oidc._auth_service.backchannel_logout.assert_called_once_with("valid-logout-token")
+
+    @pytest.mark.asyncio
+    async def test_backchannel_logout_raises_400_when_token_missing(self):
+        fast_oidc = _make_fast_oidc()
+
+        form_mock = MagicMock()
+        form_mock.get = MagicMock(return_value=None)
+        request = MagicMock()
+        request.form = AsyncMock(return_value=form_mock)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await fast_oidc.backchannel_logout(request)
+
+        assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_backchannel_logout_raises_400_on_oidc_error(self):
+        fast_oidc = _make_fast_oidc()
+        fast_oidc._auth_service.backchannel_logout = AsyncMock(
+            side_effect=OIDCError("erro interno")
+        )
+
+        form_mock = MagicMock()
+        form_mock.get = MagicMock(return_value="valid-logout-token")
+        request = MagicMock()
+        request.form = AsyncMock(return_value=form_mock)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await fast_oidc.backchannel_logout(request)
+
+        assert exc_info.value.status_code == 400

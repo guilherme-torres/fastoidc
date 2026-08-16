@@ -16,6 +16,8 @@ class OIDCSettings:
     session_ttl_seconds: int
     issuer: str | None = None
     audience: str | None = None
+    logout_endpoint: str | None = None
+    post_logout_redirect_uri: str | None = None
 
 
 @dataclass
@@ -61,6 +63,7 @@ class OIDCSession:
     scope: str
     user_info: OIDCUserInfo | None
     metadata: dict[str, Any] | None = None
+    id_token: str | None = None
 
 
 @dataclass

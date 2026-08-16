@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from fastoidc.core.models import OIDCSession, OIDCTokensResponse, OIDCUserInfo
 from fastoidc.stores import OIDCSessionStore
+from fastoidc.utils.hashing import hash_string
 
 
 class OIDCSessionService:
@@ -23,6 +24,7 @@ class OIDCSessionService:
         tokens: OIDCTokensResponse,
         user_info: OIDCUserInfo,
         metadata: Dict[str, Any] | None = None,
+        sid: str | None = None,
     ) -> OIDCSession:
         """Creates and stores a new session with the provided tokens and user info."""
         session_expires_at = datetime.now(timezone.utc) + timedelta(seconds=self._session_ttl_seconds)
@@ -37,8 +39,11 @@ class OIDCSessionService:
             scope=tokens.scope,
             user_info=user_info,
             metadata=metadata,
+            id_token=tokens.id_token,
         )
         await self._session_store.create(session)
+        if sid:
+            await self._session_store.create_sid_index(hash_string(sid), session.id)
         return session
     
     async def get(self, session_id: str) -> OIDCSession | None:
@@ -66,9 +71,16 @@ class OIDCSessionService:
         if user_info:
             session.user_info = user_info
 
+        if tokens.id_token:
+            session.id_token = tokens.id_token
+
         await self._session_store.update(session)
         return session
 
     async def delete(self, session_id: str):
         """Deletes the session corresponding to the provided identifier."""
         await self._session_store.delete(session_id)
+
+    async def delete_by_sid(self, sid_hash: str) -> bool:
+        """Deletes the session associated with the given IdP session ID hash."""
+        return await self._session_store.delete_by_sid(sid_hash)

@@ -2,7 +2,7 @@ import json
 import pytest
 import pytest_asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastoidc.core.auth_service import OIDCAuthService
 from fastoidc.exceptions import (
@@ -130,9 +130,11 @@ class TestCallback:
         with pytest.raises(InvalidStateError):
             await service.callback(code="code", state="token-falso", login_session_id="fastoidc_session")
 
+    @patch("fastoidc.core.auth_service.jwt")
     @pytest.mark.asyncio
-    async def test_callback_returns_callback_response_on_success(self):
+    async def test_callback_returns_callback_response_on_success(self, mock_jwt):
         service, deps = _make_service()
+        mock_jwt.decode.return_value = {"sid": "idp-session-id"}
 
         csrf_token = "csrf-valido"
         session_data = json.dumps({
@@ -159,9 +161,58 @@ class TestCallback:
         assert result.user_info == user_info
         assert result.app_state == {"next": "/home"}
 
+    @patch("fastoidc.core.auth_service.jwt")
     @pytest.mark.asyncio
-    async def test_callback_deletes_login_session_from_redis(self):
+    async def test_callback_passes_sid_to_session_service_create(self, mock_jwt):
         service, deps = _make_service()
+        mock_jwt.decode.return_value = {"sid": "idp-session-id"}
+
+        csrf_token = "csrf-valido"
+        session_data = json.dumps({
+            "csrf_token": csrf_token,
+            "code_verifier": "verifier",
+            "app_state": None,
+        })
+        deps["redis_client"].get = AsyncMock(return_value=session_data)
+        deps["redis_client"].delete = AsyncMock()
+        deps["oidc_client"].get_tokens = AsyncMock(return_value=_make_tokens())
+        deps["token_validator"].validate.return_value = _make_user_info()
+        deps["session_service"].create = AsyncMock(return_value=_make_session())
+
+        await service.callback(code="code", state=csrf_token, login_session_id="login-sid")
+
+        deps["session_service"].create.assert_called_once()
+        call_kwargs = deps["session_service"].create.call_args
+        assert call_kwargs.kwargs.get("sid") == "idp-session-id"
+
+    @patch("fastoidc.core.auth_service.jwt")
+    @pytest.mark.asyncio
+    async def test_callback_passes_none_sid_when_id_token_has_no_sid(self, mock_jwt):
+        service, deps = _make_service()
+        mock_jwt.decode.return_value = {}
+
+        csrf_token = "csrf-valido"
+        session_data = json.dumps({
+            "csrf_token": csrf_token,
+            "code_verifier": "verifier",
+            "app_state": None,
+        })
+        deps["redis_client"].get = AsyncMock(return_value=session_data)
+        deps["redis_client"].delete = AsyncMock()
+        deps["oidc_client"].get_tokens = AsyncMock(return_value=_make_tokens())
+        deps["token_validator"].validate.return_value = _make_user_info()
+        deps["session_service"].create = AsyncMock(return_value=_make_session())
+
+        await service.callback(code="code", state=csrf_token, login_session_id="login-sid")
+
+        call_kwargs = deps["session_service"].create.call_args
+        assert call_kwargs.kwargs.get("sid") is None
+
+    @patch("fastoidc.core.auth_service.jwt")
+    @pytest.mark.asyncio
+    async def test_callback_deletes_login_session_from_redis(self, mock_jwt):
+        service, deps = _make_service()
+        mock_jwt.decode.return_value = {"sid": "idp-session-id"}
 
         csrf_token = "csrf-valido"
         session_data = json.dumps({"csrf_token": csrf_token, "code_verifier": "verifier", "app_state": None})
@@ -252,10 +303,66 @@ class TestGetSession:
 
 class TestLogout:
     @pytest.mark.asyncio
-    async def test_logout_deletes_session(self):
+    async def test_logout_returns_url_and_deletes_session(self):
         service, deps = _make_service()
+        session = _make_session(id_token="some-id-token")
+        deps["session_service"].get = AsyncMock(return_value=session)
+        deps["oidc_client"].get_logout_url = MagicMock(return_value="https://idp/logout?id_token_hint=some-id-token")
         deps["session_service"].delete = AsyncMock()
 
-        await service.logout("session-id")
+        url = await service.logout("session-id")
 
+        assert url == "https://idp/logout?id_token_hint=some-id-token"
+        deps["oidc_client"].get_logout_url.assert_called_once_with(id_token_hint="some-id-token")
         deps["session_service"].delete.assert_called_once_with("session-id")
+
+    @pytest.mark.asyncio
+    async def test_logout_returns_none_when_no_id_token(self):
+        service, deps = _make_service()
+        session = _make_session(id_token=None)
+        deps["session_service"].get = AsyncMock(return_value=session)
+        deps["oidc_client"].get_logout_url = MagicMock()
+        deps["session_service"].delete = AsyncMock()
+
+        url = await service.logout("session-id")
+
+        assert url is None
+        deps["oidc_client"].get_logout_url.assert_not_called()
+        deps["session_service"].delete.assert_called_once_with("session-id")
+
+    @pytest.mark.asyncio
+    async def test_logout_returns_none_and_deletes_session_when_url_fails(self):
+        service, deps = _make_service()
+        session = _make_session(id_token="some-id-token")
+        deps["session_service"].get = AsyncMock(return_value=session)
+        deps["oidc_client"].get_logout_url = MagicMock(side_effect=Exception("not configured"))
+        deps["session_service"].delete = AsyncMock()
+
+        url = await service.logout("session-id")
+
+        assert url is None
+        deps["session_service"].delete.assert_called_once_with("session-id")
+
+
+class TestBackchannelLogout:
+    @pytest.mark.asyncio
+    async def test_backchannel_logout_deletes_session_by_sid(self):
+        service, deps = _make_service()
+        deps["token_validator"].validate_logout_token.return_value = "idp-session-id"
+        deps["session_service"].delete_by_sid = AsyncMock(return_value=True)
+
+        await service.backchannel_logout("logout-token-jwt")
+
+        deps["token_validator"].validate_logout_token.assert_called_once_with("logout-token-jwt")
+        deps["session_service"].delete_by_sid.assert_called_once_with(hash_string("idp-session-id"))
+
+    @pytest.mark.asyncio
+    async def test_backchannel_logout_ignores_when_session_not_found(self):
+        service, deps = _make_service()
+        deps["token_validator"].validate_logout_token.return_value = "idp-session-id"
+        deps["session_service"].delete_by_sid = AsyncMock(return_value=False)
+
+        await service.backchannel_logout("logout-token-jwt")
+
+        deps["token_validator"].validate_logout_token.assert_called_once_with("logout-token-jwt")
+        deps["session_service"].delete_by_sid.assert_called_once_with(hash_string("idp-session-id"))

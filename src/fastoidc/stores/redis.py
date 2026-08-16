@@ -11,7 +11,9 @@ from fastoidc.utils.hashing import hash_string
 
 class RedisSessionStore(OIDCSessionStore):
 
-    def __init__(self, redis_client: redis.Redis, session_key_prefix: str = "session:"):
+    SID_KEY_PREFIX = "fastoidc:sid:"
+
+    def __init__(self, redis_client: redis.Redis, session_key_prefix: str = "fastoidc:session:"):
         self.redis_client = redis_client
         self.session_key_prefix = session_key_prefix
 
@@ -55,3 +57,17 @@ class RedisSessionStore(OIDCSessionStore):
     async def delete(self, session_id: str):
         key = self._get_key(session_id)
         await self.redis_client.delete(key)
+
+    async def create_sid_index(self, sid_hash: str, session_id: str):
+        sid_key = f"{self.SID_KEY_PREFIX}{sid_hash}"
+        session_key = self._get_key(session_id)
+        await self.redis_client.set(sid_key, session_key)
+
+    async def delete_by_sid(self, sid_hash: str) -> bool:
+        sid_key = f"{self.SID_KEY_PREFIX}{sid_hash}"
+        session_key = await self.redis_client.get(sid_key)
+        if not session_key:
+            return False
+        await self.redis_client.delete(session_key)
+        await self.redis_client.delete(sid_key)
+        return True

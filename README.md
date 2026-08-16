@@ -21,7 +21,7 @@ Create your application configuration and initialize the core library instance b
 
 ```python
 import redis.asyncio as redis
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Request, Response
 from fastoidc import FastOIDC, OIDCSettings
 from fastoidc.stores import RedisSessionStore
 
@@ -36,7 +36,9 @@ oidc_settings = OIDCSettings(
     scopes="openid profile email",
     session_ttl_seconds=86400,
     issuer="token-issuer",
-    audience="token-audience"
+    audience="token-audience",
+    logout_endpoint="https://idp.company.com/oauth2/logout", # Optional: For RP-Initiated Logout
+    post_logout_redirect_uri="https://your-api.com/"         # Optional: Where to return after IdP logout
 )
 
 redis_client = redis.Redis.from_url(
@@ -67,9 +69,15 @@ async def callback(request: Request, response: Response):
     return {"state": callback_result.app_state}
 
 @app.get("/auth/logout")
-async def logout(request: Request, response: Response):
-    await auth.logout(request, response)
-    return {"status": "logged out"}
+async def logout(request: Request):
+    # Logs the user out locally and redirects them to the IdP to log out there
+    return await auth.logout(request)
+
+@app.post("/auth/backchannel_logout")
+async def backchannel_logout(request: Request):
+    # Receives the background logout notification from the IdP
+    await auth.backchannel_logout(request)
+    return Response(status_code=200)
 
 # Authenticate your routes
 @app.get("/auth/me")

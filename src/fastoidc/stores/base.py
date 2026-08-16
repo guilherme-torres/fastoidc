@@ -20,3 +20,11 @@ class OIDCSessionStore(ABC):
     @abstractmethod
     async def delete(self, session_id: str):
         ...
+
+    @abstractmethod
+    async def create_sid_index(self, sid_hash: str, session_id: str):
+        ...
+
+    @abstractmethod
+    async def delete_by_sid(self, sid_hash: str) -> bool:
+        ...

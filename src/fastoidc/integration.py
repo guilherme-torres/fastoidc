@@ -7,7 +7,7 @@ import redis.asyncio as redis
 
 from fastoidc.core.auth_service import OIDCAuthService
 from fastoidc.core.oidc_client import OIDCClient
-from fastoidc.exceptions import OIDCError, AuthenticationError
+from fastoidc.exceptions import AuthenticationError, OIDCError, SessionNotFoundError
 from fastoidc.core.models import OIDCSettings
 from fastoidc.stores import OIDCSessionStore
 from fastoidc.core.session_service import OIDCSessionService
@@ -120,14 +120,36 @@ class FastOIDC:
         return session
 
 
-    async def logout(self, request: Request, response: Response):
-        """Logs the user out by deleting session from storage and clearing session cookies."""
+    async def logout(self, request: Request) -> RedirectResponse:
+        """Logs the user out by deleting session from storage, clearing cookies, and redirecting to the IdP."""
         session_id = request.cookies.get("fastoidc_session")
+        logout_url = "/"
+        
         if session_id:
-            await self._auth_service.logout(session_id)
+            redirect_url = await self._auth_service.logout(session_id)
+            if redirect_url:
+                logout_url = redirect_url
+
+        response = RedirectResponse(url=logout_url)
         response.delete_cookie(
             key="fastoidc_session",
             secure=True,
             httponly=True,
             samesite="lax",
         )
+        return response
+
+    async def backchannel_logout(self, request: Request):
+        """Handles Back-Channel Logout notification from the IdP."""
+        form = await request.form()
+        logout_token = form.get("logout_token")
+
+        if not logout_token:
+            raise HTTPException(status_code=400, detail="Missing logout_token")
+
+        try:
+            await self._auth_service.backchannel_logout(logout_token)
+        except OIDCError:
+            raise HTTPException(status_code=400, detail="Invalid back-channel logout token")
+
+

@@ -24,3 +24,7 @@ class OIDCInternalError(OIDCError):
 
 class SessionNotFoundError(AuthenticationError):
     pass
+
+
+class BackchannelLogoutError(OIDCError):
+    pass
