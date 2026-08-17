@@ -1,7 +1,8 @@
+from typing import Any
+
 import jwt
 from jwt import PyJWKClient
 
-from fastoidc.core.models import OIDCUserInfo
 from fastoidc.exceptions import OIDCError
 
 
@@ -19,7 +20,8 @@ class TokenValidator:
         self._issuer = issuer
         self._audience = audience
 
-    def validate(self, id_token: str | None) -> OIDCUserInfo:
+
+    def validate(self, id_token: str | None) -> dict[str, Any]:
         """Validates the ID token and returns the user profile information."""
         if id_token is None:
             raise OIDCError("ID token was not returned by the authorization server")
@@ -35,17 +37,10 @@ class TokenValidator:
                 issuer=self._issuer,
             )
 
-            return OIDCUserInfo(
-                sub=claims.get("sub"),
-                username=claims.get("username"),
-                email=claims.get("email"),
-                given_name=claims.get("given_name"),
-                family_name=claims.get("family_name"),
-                name=claims.get("name"),
-                picture=claims.get("picture"),
-            )
+            return claims
         except jwt.PyJWTError as e:
             raise OIDCError(f"Invalid or expired ID token: {e}") from e
+
 
     def validate_logout_token(self, logout_token: str) -> str:
         """Validates a Back-Channel Logout Token and returns the sid claim."""
@@ -74,4 +69,3 @@ class TokenValidator:
             return sid
         except jwt.PyJWTError as e:
             raise OIDCError(f"Invalid or expired logout token: {e}") from e
-

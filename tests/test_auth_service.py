@@ -15,7 +15,6 @@ from fastoidc.core.models import (
     OIDCLoginResponse,
     OIDCSession,
     OIDCTokensResponse,
-    OIDCUserInfo,
 )
 from fastoidc.utils.hashing import hash_string
 
@@ -41,14 +40,14 @@ def _make_session(**overrides) -> OIDCSession:
         access_token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         token_type="Bearer",
         scope="openid profile",
-        user_info=OIDCUserInfo(sub="user-123"),
+        user_info={"sub": "user-123"},
     )
     return OIDCSession(**{**defaults, **overrides})
 
 
-def _make_user_info(**overrides) -> OIDCUserInfo:
+def _make_user_info(**overrides) -> dict:
     defaults = dict(sub="user-123", email="user@empresa.com")
-    return OIDCUserInfo(**{**defaults, **overrides})
+    return {**defaults, **overrides}
 
 
 def _make_service(**overrides):

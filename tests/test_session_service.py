@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 from fastoidc.exceptions import SessionNotFoundError
-from fastoidc.core.models import OIDCSession, OIDCTokensResponse, OIDCUserInfo
+from fastoidc.core.models import OIDCSession, OIDCTokensResponse
 from fastoidc.core.session_service import OIDCSessionService
 
 
@@ -30,7 +30,7 @@ def _make_session(**overrides) -> OIDCSession:
         access_token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         token_type="Bearer",
         scope="openid profile",
-        user_info=OIDCUserInfo(sub="user-123"),
+        user_info={"sub": "user-123"},
     )
     return OIDCSession(**{**defaults, **overrides})
 
@@ -48,7 +48,7 @@ class TestCreate:
         store.create = AsyncMock()
 
         tokens = _make_tokens()
-        user_info = OIDCUserInfo(sub="user-123")
+        user_info = {"sub": "user-123"}
 
         result = await service.create(tokens=tokens, user_info=user_info)
 
@@ -60,7 +60,7 @@ class TestCreate:
         store.create = AsyncMock()
 
         tokens = _make_tokens(expires_in=60)
-        user_info = OIDCUserInfo(sub="user-123")
+        user_info = {"sub": "user-123"}
 
         before = datetime.now(timezone.utc)
         result = await service.create(tokens=tokens, user_info=user_info)
@@ -75,7 +75,7 @@ class TestCreate:
         store.create = AsyncMock()
 
         tokens = _make_tokens(access_token="meu-token", refresh_token="meu-refresh")
-        user_info = OIDCUserInfo(sub="user-abc")
+        user_info = {"sub": "user-abc"}
 
         result = await service.create(tokens=tokens, user_info=user_info)
 
@@ -149,7 +149,7 @@ class TestUpdate:
         store.get = AsyncMock(return_value=session)
         store.update = AsyncMock()
 
-        new_user_info = OIDCUserInfo(sub="user-novo", email="novo@empresa.com")
+        new_user_info = {"sub": "user-novo", "email": "novo@empresa.com"}
         result = await service.update(session_id="session-id", tokens=_make_tokens(), user_info=new_user_info)
 
         assert result.user_info == new_user_info

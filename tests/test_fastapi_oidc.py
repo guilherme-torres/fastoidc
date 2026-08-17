@@ -1,15 +1,15 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 import pytest_asyncio
-from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
-
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from fastapi import FastAPI, Request, Response, Depends
 
 from fastoidc.integration import FastOIDC
 from fastoidc.exceptions import AuthenticationError, OIDCError, SessionNotFoundError
-from fastoidc.core.models import OIDCSession, OIDCUserInfo
+from fastoidc.core.models import OIDCSession
 
 
 def _make_session(**overrides) -> OIDCSession:
@@ -21,7 +21,7 @@ def _make_session(**overrides) -> OIDCSession:
         access_token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         token_type="Bearer",
         scope="openid profile",
-        user_info=OIDCUserInfo(sub="user-123", email="user@empresa.com"),
+        user_info={"sub": "user-123", "email": "user@empresa.com"},
     )
     return OIDCSession(**{**defaults, **overrides})
 

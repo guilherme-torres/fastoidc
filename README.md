@@ -37,35 +37,29 @@ oidc_settings = OIDCSettings(
     session_ttl_seconds=86400,
     issuer="token-issuer",
     audience="token-audience",
-    logout_endpoint="https://idp.company.com/oauth2/logout", # Optional: For RP-Initiated Logout
-    post_logout_redirect_uri="https://your-api.com/"         # Optional: Where to return after IdP logout
+    logout_endpoint="https://idp.company.com/oauth2/logout",  # Optional
+    post_logout_redirect_uri="https://your-api.com/",         # Optional
 )
 
-redis_client = redis.Redis.from_url(
-    "redis://localhost:6379/0", decode_responses=True
-)
-
+redis_client = redis.Redis.from_url("redis://localhost:6379/0", decode_responses=True)
 session_store = RedisSessionStore(redis_client=redis_client)
 
 auth = FastOIDC(
     settings=oidc_settings,
     redis_client=redis_client,
-    session_store=session_store
+    session_store=session_store,
 )
 
 app = FastAPI()
 
 @app.get("/auth/login")
 async def login(redirect_to: str = "/dashboard"):
-    # You can pass an optional state
+    # You can pass an optional app state
     return await auth.login(app_state=redirect_to)
 
 @app.get("/auth/callback")
 async def callback(request: Request, response: Response):
     callback_result = await auth.callback(request, response)
-    # Retrieving state
-    app_state = callback_result.app_state
-    # Do something
     return {"state": callback_result.app_state}
 
 @app.get("/auth/logout")
@@ -78,73 +72,67 @@ async def backchannel_logout(request: Request):
     # Receives the background logout notification from the IdP
     return await auth.backchannel_logout(request)
 
-# Authenticate your routes
 @app.get("/auth/me")
-async def me(session: OIDCSession = Depends(auth.require_session)):
+async def me(session = Depends(auth.require_session)):
+    # user_info is a dict with all claims extracted from the ID token
     return {
-        "name": session.user_info.name,
-        "email": session.user_info.email,
-        "picture": session.user_info.picture,
+        "name": session.user_info.get("name"),
+        "email": session.user_info.get("email"),
+        "picture": session.user_info.get("picture"),
     }
 ```
 
 ## Optional Session Usage
 
-For endpoints where authentication is optional but changes the response when the user is logged in, use the `get_session` dependency.
+For endpoints where authentication is optional, use `get_session`. The route remains accessible to unauthenticated users:
 
 ```python
+from fastoidc.core.models import OIDCSession
+
 @app.get("/welcome")
 async def welcome(session: OIDCSession | None = Depends(auth.get_session)):
     if session:
-        return {"message": f"Welcome back, {session.user_info.name}"}
-    return {"message" "Welcome, stranger"}
+        return {"message": f"Welcome back, {session.user_info.get('name')}"}
+    return {"message": "Welcome, stranger"}
 ```
 
 ## Using Session Metadata
 
-The `OIDCSession` object includes a `metadata` dictionary field that you can use to attach custom data (like tenant IDs, custom roles, or permissions) to an active session.
+The `OIDCSession` object includes a `metadata` dictionary field that you can use to attach custom data (like tenant IDs, roles, or permissions) to an active session.
 
-Since you instantiate the `session_store` directly in your application, you can persist any changes made to a session by calling the store's update method.
+Since you instantiate the `session_store` directly in your application, you can persist any changes by calling the store's update method:
 
 ```python
 @app.post("/auth/roles")
-async def update_roles(session: OIDCSession = Depends(auth.require_session)):
-    # Initialize metadata if not present
+async def update_roles(session = Depends(auth.require_session)):
     if not session.metadata:
         session.metadata = {}
-    
-    # Store custom business logic data
+
     session.metadata["roles"] = ["admin", "editor"]
-    
-    # Persist the changes back to Redis (or your custom store)
+
     await session_store.update(session)
-    
+
     return {"status": "roles updated"}
 ```
 
 ## Custom Authentication Dependencies
 
-You can leverage FastAPI's powerful `Depends` system to create custom authorization dependencies on top of the base `auth.require_session`. 
+You can leverage FastAPI's `Depends` system to build custom authorization layers on top of `auth.require_session`.
 
-For example, if you stored a list of roles in the session's `metadata`, you can easily create a `require_admin` dependency that blocks unauthorized users:
+For example, to protect routes with a role check:
 
 ```python
 from fastapi import HTTPException
 
-async def require_admin(session: OIDCSession = Depends(auth.require_session)):
-    # Safely retrieve roles from metadata
+async def require_admin(session = Depends(auth.require_session)):
     roles = session.metadata.get("roles", []) if session.metadata else []
-    
+
     if "admin" not in roles:
-        raise HTTPException(
-            status_code=403, 
-            detail="Admin required"
-        )
-    
+        raise HTTPException(status_code=403, detail="Admin required")
+
     return session
 
-# Protect your route using the custom dependency
 @app.get("/admin/dashboard")
-async def admin_dashboard(session: OIDCSession = Depends(require_admin)):
-    return {"message": f"Welcome to the admin area, {session.user_info.name}!"}
+async def admin_dashboard(session = Depends(require_admin)):
+    return {"message": f"Welcome to the admin area, {session.user_info.get('name')}!"}
 ```

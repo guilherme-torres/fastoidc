@@ -5,7 +5,6 @@ from fastoidc.core.models import (
     OIDCSession,
     OIDCSettings,
     OIDCTokensResponse,
-    OIDCUserInfo,
 )
 
 
@@ -16,5 +15,4 @@ __all__ = [
     "OIDCSession",
     "OIDCSettings",
     "OIDCTokensResponse",
-    "OIDCUserInfo",
 ]

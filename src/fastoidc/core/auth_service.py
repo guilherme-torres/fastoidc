@@ -181,4 +181,3 @@ class OIDCAuthService:
         sid = self._token_validator.validate_logout_token(logout_token)
         sid_hash = hash_string(sid)
         await self._session_service.delete_by_sid(sid_hash)
-

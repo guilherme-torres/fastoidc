@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 import jwt
 
 from fastoidc.exceptions import OIDCError
-from fastoidc.core.models import OIDCUserInfo
 from fastoidc.core.token_validator import TokenValidator
 
 
@@ -41,14 +40,14 @@ def test_validate_returns_user_info_on_valid_token():
     with patch("jwt.decode", return_value=claims):
         result = validator.validate("token-valido")
 
-    assert isinstance(result, OIDCUserInfo)
-    assert result.sub == "user-123"
-    assert result.email == "user@empresa.com"
-    assert result.name == "Guilherme Torres"
-    assert result.given_name == "Guilherme"
-    assert result.family_name == "Torres"
-    assert result.username == "guilherme"
-    assert result.picture == "https://cdn.empresa.com/foto.jpg"
+    assert isinstance(result, dict)
+    assert result.get("sub") == "user-123"
+    assert result.get("email") == "user@empresa.com"
+    assert result.get("name") == "Guilherme Torres"
+    assert result.get("given_name") == "Guilherme"
+    assert result.get("family_name") == "Torres"
+    assert result.get("username") == "guilherme"
+    assert result.get("picture") == "https://cdn.empresa.com/foto.jpg"
 
 
 def test_validate_raises_delta_error_on_jwt_error():
@@ -67,6 +66,6 @@ def test_validate_partial_claims_are_none():
     with patch("jwt.decode", return_value={"sub": "user-456"}):
         result = validator.validate("token-parcial")
 
-    assert result.sub == "user-456"
-    assert result.email is None
-    assert result.name is None
+    assert result.get("sub") == "user-456"
+    assert result.get("email") is None
+    assert result.get("name") is None

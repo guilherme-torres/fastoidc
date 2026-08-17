@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass
@@ -40,18 +40,6 @@ class OIDCLoginResponse:
 
 
 @dataclass
-class OIDCUserInfo:
-    """User profile information extracted and validated from the ID token."""
-    sub: str
-    username: str | None = None
-    email: str | None = None
-    given_name: str | None = None
-    family_name: str | None = None
-    name: str | None = None
-    picture: str | None = None
-
-
-@dataclass
 class OIDCSession:
     """Represents an active user session, storing associated tokens and validation states."""
     id: str
@@ -61,7 +49,7 @@ class OIDCSession:
     access_token_expires_at: datetime
     token_type: str
     scope: str
-    user_info: OIDCUserInfo | None
+    user_info: dict[str, Any] | None
     metadata: dict[str, Any] | None = None
     id_token: str | None = None
 
@@ -70,5 +58,5 @@ class OIDCSession:
 class OIDCCallbackResponse:
     """Data returned after successfully processing the authentication callback."""
     session_id: str
-    user_info: OIDCUserInfo
+    user_info: dict[str, Any]
     app_state: Any
