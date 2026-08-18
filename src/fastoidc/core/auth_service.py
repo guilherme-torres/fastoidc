@@ -50,6 +50,7 @@ class OIDCAuthService:
         self,
         login_hint: str | None = None,
         app_state: Any = None,
+        extra_params: dict | None = None,
     ):
         """Initiates the login flow by generating login URLs, PKCE codes, and storing login session data in Redis."""
         login_session_id = token_urlsafe(64)
@@ -63,6 +64,7 @@ class OIDCAuthService:
             login_hint=login_hint,
             state=csrf_token,
             code_challenge=code_challenge,
+            extra_params=extra_params,
         )
 
         login_session_data = {
@@ -157,6 +159,8 @@ class OIDCAuthService:
                     tokens=tokens,
                     user_info=user_info
                 )
+        else:
+            session = await self._session_service.touch(session)
                 
         return session
 

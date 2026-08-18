@@ -13,9 +13,9 @@ class OIDCSettings:
     authorization_endpoint: str
     jwks_endpoint: str
     scopes: str
-    session_ttl_seconds: int
-    issuer: str | None = None
-    audience: str | None = None
+    issuer: str
+    audience: str
+    session_ttl_seconds: int = 86400
     logout_endpoint: str | None = None
     post_logout_redirect_uri: str | None = None
 

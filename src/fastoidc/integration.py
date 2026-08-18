@@ -1,3 +1,5 @@
+import logging
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import HTTPException, Request, Response
@@ -12,6 +14,8 @@ from fastoidc.core.models import OIDCSettings
 from fastoidc.stores import OIDCSessionStore
 from fastoidc.core.session_service import OIDCSessionService
 from fastoidc.core.token_validator import TokenValidator
+
+logger = logging.getLogger(__name__)
 
 
 class FastOIDC:
@@ -45,11 +49,13 @@ class FastOIDC:
         self,
         login_hint: str | None = None,
         app_state: Any = None,
+        extra_params: dict | None = None,
     ):
         """Initiates the login flow, returning a redirect response and setting a temporary login cookie."""
         data = await self._auth_service.login(
             login_hint=login_hint,
             app_state=app_state,
+            extra_params=extra_params,
         )
         response = RedirectResponse(url=data.login_url)
         response.set_cookie(
@@ -84,7 +90,8 @@ class FastOIDC:
             )
         except AuthenticationError as e:
             raise HTTPException(status_code=401, detail=str(e))
-        except OIDCError:
+        except OIDCError as e:
+            logger.exception("Unexpected error during OIDC callback: %s", e)
             raise HTTPException(status_code=500, detail="Internal server error")
 
         response.set_cookie(
@@ -98,23 +105,37 @@ class FastOIDC:
         return callback_response
 
 
-    async def get_session(self, request: Request):
+    async def get_session(self, request: Request, response: Response | None = None):
         """Retrieves the active session from request cookies, verifying/refreshing it if needed."""
         session_id = request.cookies.get("fastoidc_session")
         if not session_id:
             return None
             
         try:
-            return await self._auth_service.get_session(session_id)
+            session = await self._auth_service.get_session(session_id)
         except AuthenticationError:
             return None
-        except OIDCError:
+        except OIDCError as e:
+            logger.exception("Unexpected error during get session: %s", e)
             raise HTTPException(status_code=500, detail="Internal server error")
 
+        if session and response is not None:
+            remaining = int((session.expires_at - datetime.now(timezone.utc)).total_seconds())
+            response.set_cookie(
+                key="fastoidc_session",
+                value=session_id,
+                max_age=max(remaining, 0),
+                secure=True,
+                httponly=True,
+                samesite="lax",
+            )
 
-    async def require_session(self, request: Request):
+        return session
+
+
+    async def require_session(self, request: Request, response: Response):
         """FastAPI dependency that enforces a valid session, raising 401 if missing or invalid."""
-        session = await self.get_session(request)
+        session = await self.get_session(request, response)
         if not session:
             raise HTTPException(status_code=401, detail="Valid session required")
         return session
