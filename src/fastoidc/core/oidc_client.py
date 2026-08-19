@@ -57,10 +57,13 @@ class OIDCClient:
         if code_verifier:
             payload["code_verifier"] = code_verifier
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     url=self._settings.token_endpoint,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Accept": "application/json"
+                    },
                     data=payload,
                 )
                 response.raise_for_status()
@@ -70,11 +73,32 @@ class OIDCClient:
                     refresh_token=data.get("refresh_token"),
                     scope=data.get("scope"),
                     id_token=data.get("id_token"),
-                    token_type=data.get("token_type"),
+                    token_type=data.get("token_type", "Bearer"),
                     expires_in=data.get("expires_in"),
+                    refresh_token_expires_in=data.get("refresh_token_expires_in"),
                 )
         except httpx.HTTPStatusError as e:
             raise OAuthError(f"OAuth request failed: {e}") from e
+        except httpx.RequestError as e:
+            raise OIDCInternalError(f"FastOIDC API connection error: {e}") from e
+
+    async def get_userinfo(self, access_token: str) -> dict:
+        if not self._settings.userinfo_endpoint:
+            raise OIDCInternalError("userinfo_endpoint is not configured")
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    url=self._settings.userinfo_endpoint,
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Accept": "application/json"
+                    }
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            raise OAuthError(f"Userinfo request failed: {e}") from e
         except httpx.RequestError as e:
             raise OIDCInternalError(f"FastOIDC API connection error: {e}") from e
     
@@ -82,7 +106,7 @@ class OIDCClient:
     async def refresh_tokens(self, refresh_token: str):
         """Uses a refresh token to obtain a new set of active tokens."""
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     url=self._settings.token_endpoint,
                     headers={"Content-Type": "application/x-www-form-urlencoded"},

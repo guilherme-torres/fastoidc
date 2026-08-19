@@ -11,24 +11,26 @@ class OIDCSettings:
     redirect_uri: str
     token_endpoint: str
     authorization_endpoint: str
-    jwks_endpoint: str
     scopes: str
-    issuer: str
-    audience: str
+    jwks_endpoint: str | None = None
+    issuer: str | None = None
+    audience: str | None = None
     session_ttl_seconds: int = 86400
     logout_endpoint: str | None = None
     post_logout_redirect_uri: str | None = None
+    userinfo_endpoint: str | None = None
 
 
 @dataclass
 class OIDCTokensResponse:
     """Token response schema returned by the FastOIDC token endpoint."""
     access_token: str
-    id_token: str
     token_type: str
-    expires_in: int
-    scope: str
+    expires_in: int | None = None
+    scope: str | None = None
+    id_token: str | None = None
     refresh_token: str | None = None
+    refresh_token_expires_in: int | None = None
 
 
 @dataclass

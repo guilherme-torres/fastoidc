@@ -29,7 +29,9 @@ class OIDCSessionService:
     ) -> OIDCSession:
         """Creates and stores a new session with the provided tokens and user info."""
         session_expires_at = datetime.now(timezone.utc) + timedelta(seconds=self._session_ttl_seconds)
-        access_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
+        access_expires_seconds = tokens.expires_in if tokens.expires_in is not None else self._session_ttl_seconds
+        access_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=access_expires_seconds)
+        
         session = OIDCSession(
             id=token_hex(32),
             access_token=tokens.access_token,
@@ -68,7 +70,8 @@ class OIDCSessionService:
         if tokens.refresh_token:
             session.refresh_token = tokens.refresh_token
             
-        session.access_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
+        access_expires_seconds = tokens.expires_in if tokens.expires_in is not None else self._session_ttl_seconds
+        session.access_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=access_expires_seconds)
         session.expires_at = datetime.now(timezone.utc) + timedelta(seconds=self._session_ttl_seconds)
 
         if user_info:

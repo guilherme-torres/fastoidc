@@ -30,12 +30,16 @@ class FastOIDC:
         algorithms: list[str] | None = None,
     ):
         """Initializes FastOIDC with setting configurations, Redis, and custom session store."""
-        self._token_validator = TokenValidator(
-            jwk_client=PyJWKClient(settings.jwks_endpoint, cache_keys=True, lifespan=3600),
-            issuer=settings.issuer,
-            audience=settings.audience if settings.audience is not None else settings.client_id,
-            algorithms=algorithms,
-        )
+        if settings.jwks_endpoint and settings.issuer:
+            self._token_validator = TokenValidator(
+                jwk_client=PyJWKClient(settings.jwks_endpoint, cache_keys=True, lifespan=3600),
+                issuer=settings.issuer,
+                audience=settings.audience if settings.audience is not None else settings.client_id,
+                algorithms=algorithms,
+            )
+        else:
+            self._token_validator = None
+
         self._session_service = OIDCSessionService(
             session_store=session_store,
             session_ttl_seconds=settings.session_ttl_seconds,
@@ -84,6 +88,44 @@ class FastOIDC:
 
         algorithms = doc.get("id_token_signing_alg_values_supported")
         return cls(settings, redis_client, session_store, algorithms=algorithms)
+
+
+    @classmethod
+    def from_config(
+        cls,
+        client_id: str,
+        client_secret: str,
+        redirect_uri: str,
+        scopes: str,
+        token_endpoint: str,
+        authorization_endpoint: str,
+        redis_client: redis.Redis,
+        session_store: OIDCSessionStore,
+        userinfo_endpoint: str | None = None,
+        jwks_endpoint: str | None = None,
+        issuer: str | None = None,
+        audience: str | None = None,
+        session_ttl_seconds: int = 86400,
+        logout_endpoint: str | None = None,
+        post_logout_redirect_uri: str | None = None,
+    ) -> "FastOIDC":
+        """Creates a FastOIDC instance directly from provided endpoints without auto-discovery."""
+        settings = OIDCSettings(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            scopes=scopes,
+            token_endpoint=token_endpoint,
+            authorization_endpoint=authorization_endpoint,
+            jwks_endpoint=jwks_endpoint,
+            issuer=issuer,
+            audience=audience or client_id,
+            session_ttl_seconds=session_ttl_seconds,
+            logout_endpoint=logout_endpoint,
+            post_logout_redirect_uri=post_logout_redirect_uri,
+            userinfo_endpoint=userinfo_endpoint,
+        )
+        return cls(settings, redis_client, session_store)
 
 
     async def login(
@@ -146,7 +188,7 @@ class FastOIDC:
         return callback_response
 
 
-    async def get_session(self, request: Request, response: Response | None = None):
+    async def get_session(self, request: Request, response: Response):
         """Retrieves the active session from request cookies, verifying/refreshing it if needed."""
         session_id = request.cookies.get("fastoidc_session")
         if not session_id:
@@ -160,7 +202,7 @@ class FastOIDC:
             logger.exception("Unexpected error during get session: %s", e)
             raise HTTPException(status_code=500, detail="Internal server error")
 
-        if session and response is not None:
+        if session:
             remaining = int((session.expires_at - datetime.now(timezone.utc)).total_seconds())
             response.set_cookie(
                 key="fastoidc_session",
@@ -182,10 +224,10 @@ class FastOIDC:
         return session
 
 
-    async def logout(self, request: Request) -> RedirectResponse:
+    async def logout(self, request: Request, fallback_url: str = "/") -> RedirectResponse:
         """Logs the user out by deleting session from storage, clearing cookies, and redirecting to the IdP."""
         session_id = request.cookies.get("fastoidc_session")
-        logout_url = "/"
+        logout_url = fallback_url
         
         if session_id:
             redirect_url = await self._auth_service.logout(session_id)

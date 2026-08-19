@@ -62,8 +62,9 @@ class TestGetSession:
         fast_oidc = _make_fast_oidc()
         request = MagicMock()
         request.cookies = {}
+        response = MagicMock()
 
-        result = await fast_oidc.get_session(request)
+        result = await fast_oidc.get_session(request, response)
 
         assert result is None
 
@@ -75,8 +76,9 @@ class TestGetSession:
 
         request = MagicMock()
         request.cookies = {"fastoidc_session": "session-id"}
+        response = MagicMock()
 
-        result = await fast_oidc.get_session(request)
+        result = await fast_oidc.get_session(request, response)
 
         assert result == session
 
@@ -87,8 +89,9 @@ class TestGetSession:
 
         request = MagicMock()
         request.cookies = {"fastoidc_session": "session-inexistente"}
+        response = MagicMock()
 
-        result = await fast_oidc.get_session(request)
+        result = await fast_oidc.get_session(request, response)
 
         assert result is None
 
@@ -99,9 +102,10 @@ class TestGetSession:
 
         request = MagicMock()
         request.cookies = {"fastoidc_session": "session-id"}
+        response = MagicMock()
 
         with pytest.raises(HTTPException) as exc_info:
-            await fast_oidc.get_session(request)
+            await fast_oidc.get_session(request, response)
 
         assert exc_info.value.status_code == 500
 

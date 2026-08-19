@@ -129,11 +129,9 @@ class TestCallback:
         with pytest.raises(InvalidStateError):
             await service.callback(code="code", state="token-falso", login_session_id="fastoidc_session")
 
-    @patch("fastoidc.core.auth_service.jwt")
     @pytest.mark.asyncio
-    async def test_callback_returns_callback_response_on_success(self, mock_jwt):
+    async def test_callback_returns_callback_response_on_success(self):
         service, deps = _make_service()
-        mock_jwt.decode.return_value = {"sid": "idp-session-id"}
 
         csrf_token = "csrf-valido"
         session_data = json.dumps({
@@ -147,7 +145,7 @@ class TestCallback:
         tokens = _make_tokens()
         deps["oidc_client"].get_tokens = AsyncMock(return_value=tokens)
 
-        user_info = _make_user_info()
+        user_info = _make_user_info(sid="idp-session-id")
         deps["token_validator"].validate.return_value = user_info
 
         session = _make_session()
@@ -160,11 +158,9 @@ class TestCallback:
         assert result.user_info == user_info
         assert result.app_state == {"next": "/home"}
 
-    @patch("fastoidc.core.auth_service.jwt")
     @pytest.mark.asyncio
-    async def test_callback_passes_sid_to_session_service_create(self, mock_jwt):
+    async def test_callback_passes_sid_to_session_service_create(self):
         service, deps = _make_service()
-        mock_jwt.decode.return_value = {"sid": "idp-session-id"}
 
         csrf_token = "csrf-valido"
         session_data = json.dumps({
@@ -175,7 +171,7 @@ class TestCallback:
         deps["redis_client"].get = AsyncMock(return_value=session_data)
         deps["redis_client"].delete = AsyncMock()
         deps["oidc_client"].get_tokens = AsyncMock(return_value=_make_tokens())
-        deps["token_validator"].validate.return_value = _make_user_info()
+        deps["token_validator"].validate.return_value = _make_user_info(sid="idp-session-id")
         deps["session_service"].create = AsyncMock(return_value=_make_session())
 
         await service.callback(code="code", state=csrf_token, login_session_id="login-sid")
@@ -184,11 +180,9 @@ class TestCallback:
         call_kwargs = deps["session_service"].create.call_args
         assert call_kwargs.kwargs.get("sid") == "idp-session-id"
 
-    @patch("fastoidc.core.auth_service.jwt")
     @pytest.mark.asyncio
-    async def test_callback_passes_none_sid_when_id_token_has_no_sid(self, mock_jwt):
+    async def test_callback_passes_none_sid_when_id_token_has_no_sid(self):
         service, deps = _make_service()
-        mock_jwt.decode.return_value = {}
 
         csrf_token = "csrf-valido"
         session_data = json.dumps({
@@ -199,7 +193,11 @@ class TestCallback:
         deps["redis_client"].get = AsyncMock(return_value=session_data)
         deps["redis_client"].delete = AsyncMock()
         deps["oidc_client"].get_tokens = AsyncMock(return_value=_make_tokens())
-        deps["token_validator"].validate.return_value = _make_user_info()
+        
+        user_info = _make_user_info()
+        user_info.pop("sid", None)
+        deps["token_validator"].validate.return_value = user_info
+        
         deps["session_service"].create = AsyncMock(return_value=_make_session())
 
         await service.callback(code="code", state=csrf_token, login_session_id="login-sid")
@@ -207,18 +205,16 @@ class TestCallback:
         call_kwargs = deps["session_service"].create.call_args
         assert call_kwargs.kwargs.get("sid") is None
 
-    @patch("fastoidc.core.auth_service.jwt")
     @pytest.mark.asyncio
-    async def test_callback_deletes_login_session_from_redis(self, mock_jwt):
+    async def test_callback_deletes_login_session_from_redis(self):
         service, deps = _make_service()
-        mock_jwt.decode.return_value = {"sid": "idp-session-id"}
 
         csrf_token = "csrf-valido"
         session_data = json.dumps({"csrf_token": csrf_token, "code_verifier": "verifier", "app_state": None})
         deps["redis_client"].get = AsyncMock(return_value=session_data)
         deps["redis_client"].delete = AsyncMock()
         deps["oidc_client"].get_tokens = AsyncMock(return_value=_make_tokens())
-        deps["token_validator"].validate.return_value = _make_user_info()
+        deps["token_validator"].validate.return_value = _make_user_info(sid="idp-session-id")
         deps["session_service"].create = AsyncMock(return_value=_make_session())
 
         await service.callback(code="code", state=csrf_token, login_session_id="login-sid")

@@ -17,6 +17,7 @@ FastOIDC has been successfully tested with the following Providers:
 - WSO2
 - Keycloak
 - Auth0
+- Github
 
 See [examples](examples) folder.
 
@@ -58,36 +59,26 @@ auth = FastOIDC.from_discovery(
 )
 ```
 
-### Manual Configuration
+### Manual Configuration / Pure OAuth2
 
-If your provider does not support Auto-Discovery or you need full control, you can define all endpoints manually.
+If your provider does not support Auto-Discovery (e.g., pure OAuth2 providers like GitHub that don't implement OIDC or `.well-known` endpoints), you can use `from_config` to explicitly define endpoints. For providers that don't issue an `id_token`, you can provide a `userinfo_endpoint` to automatically fetch user data.
 
 ```python
 import redis.asyncio as redis
-from fastoidc import FastOIDC, OIDCSettings
+from fastoidc import FastOIDC
 from fastoidc.stores import RedisSessionStore
-
-
-oidc_settings = OIDCSettings(
-    client_id="your-client-id",
-    client_secret="your-client-secret",
-    redirect_uri="https://your-api.com/auth/callback",
-    token_endpoint="https://idp.company.com/oauth2/token",
-    authorization_endpoint="https://idp.company.com/oauth2/authorize",
-    jwks_endpoint="https://idp.company.com/oauth2/jwks",
-    scopes="openid profile email",
-    session_ttl_seconds=86400,
-    issuer="token-issuer",
-    audience="token-audience",
-    logout_endpoint="https://idp.company.com/oauth2/logout",  # Optional
-    post_logout_redirect_uri="https://your-api.com/",         # Optional
-)
 
 redis_client = redis.Redis.from_url("redis://localhost:6379/0", decode_responses=True)
 session_store = RedisSessionStore(redis_client=redis_client)
 
-auth = FastOIDC(
-    settings=oidc_settings,
+auth = FastOIDC.from_config(
+    client_id="your-client-id",
+    client_secret="your-client-secret",
+    redirect_uri="https://your-api.com/auth/callback",
+    scopes="read:user user:email",
+    token_endpoint="https://github.com/login/oauth/access_token",
+    authorization_endpoint="https://github.com/login/oauth/authorize",
+    userinfo_endpoint="https://api.github.com/user",
     redis_client=redis_client,
     session_store=session_store,
 )
@@ -124,7 +115,7 @@ async def backchannel_logout(request: Request):
     return await auth.backchannel_logout(request)
 
 @app.get("/auth/me")
-async def me(session = Depends(auth.require_session)):
+async def me(session: OIDCSession = Depends(auth.require_session)):
     # user_info is a dict with all claims extracted from the ID token
     return {
         "name": session.user_info.get("name"),

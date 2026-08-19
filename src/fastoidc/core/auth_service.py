@@ -35,7 +35,7 @@ class OIDCAuthService:
         self,
         oidc_client: OIDCClient,
         redis_client: redis.Redis,
-        token_validator: TokenValidator,
+        token_validator: TokenValidator | None,
         session_service: OIDCSessionService,
     ):
         """Initializes the authentication service with FastOIDC client, Redis, token validator, and session service."""
@@ -111,10 +111,12 @@ class OIDCAuthService:
             code_verifier=login_session_data.get("code_verifier"),
         )
 
-        user_info = self._token_validator.validate(tokens.id_token)
-
-        id_token_claims = jwt.decode(tokens.id_token, options={"verify_signature": False})
-        sid = id_token_claims.get("sid")
+        sid = None
+        if tokens.id_token:
+            user_info = self._token_validator.validate(tokens.id_token)
+            sid = user_info.get("sid")
+        else:
+            user_info = await self._oidc_client.get_userinfo(tokens.access_token)
 
         session = await self._session_service.create(
             tokens=tokens,
