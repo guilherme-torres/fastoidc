@@ -9,6 +9,17 @@ FastOIDC is a native OIDC/OAuth2 authentication library for FastAPI, focusing on
 - Automatic Token Renewal
 - Native dependency injection for FastAPI (`Depends`)
 
+## Supported Providers
+
+FastOIDC has been successfully tested with the following Providers:
+
+- Google
+- WSO2
+- Keycloak
+- Auth0
+
+See [examples](examples) folder.
+
 ## Installation
 
 ```bash
