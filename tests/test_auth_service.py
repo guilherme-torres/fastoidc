@@ -240,7 +240,8 @@ class TestGetSession:
         service, deps = _make_service()
         session = _make_session()
         deps["session_service"].get = AsyncMock(return_value=session)
-
+        deps["session_service"].touch = AsyncMock(return_value=session)
+    
         result = await service.get_session("session-id")
 
         assert result == session

@@ -16,6 +16,7 @@ def _make_settings(**overrides) -> OIDCSettings:
         scopes="openid profile",
         session_ttl_seconds=3600,
         issuer="https://idp.empresa.com",
+        audience="client-id",
         logout_endpoint="https://idp.empresa.com/logout",
         post_logout_redirect_uri="https://app.empresa.com/logged-out",
     )

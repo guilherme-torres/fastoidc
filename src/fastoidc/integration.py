@@ -1,3 +1,5 @@
+import logging
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import HTTPException, Request, Response
@@ -6,12 +8,15 @@ from jwt import PyJWKClient
 import redis.asyncio as redis
 
 from fastoidc.core.auth_service import OIDCAuthService
+from fastoidc.core.discovery_client import DiscoveryClient
 from fastoidc.core.oidc_client import OIDCClient
 from fastoidc.exceptions import AuthenticationError, OIDCError, SessionNotFoundError
 from fastoidc.core.models import OIDCSettings
 from fastoidc.stores import OIDCSessionStore
 from fastoidc.core.session_service import OIDCSessionService
 from fastoidc.core.token_validator import TokenValidator
+
+logger = logging.getLogger(__name__)
 
 
 class FastOIDC:
@@ -22,12 +27,14 @@ class FastOIDC:
         settings: OIDCSettings,
         redis_client: redis.Redis,
         session_store: OIDCSessionStore,
+        algorithms: list[str] | None = None,
     ):
         """Initializes FastOIDC with setting configurations, Redis, and custom session store."""
         self._token_validator = TokenValidator(
             jwk_client=PyJWKClient(settings.jwks_endpoint, cache_keys=True, lifespan=3600),
             issuer=settings.issuer,
             audience=settings.audience if settings.audience is not None else settings.client_id,
+            algorithms=algorithms,
         )
         self._session_service = OIDCSessionService(
             session_store=session_store,
@@ -41,15 +48,55 @@ class FastOIDC:
         )
 
 
+    @classmethod
+    def from_discovery(
+        cls,
+        discovery_endpoint: str,
+        client_id: str,
+        client_secret: str,
+        redirect_uri: str,
+        scopes: str,
+        redis_client: redis.Redis,
+        session_store: OIDCSessionStore,
+        audience: str | None = None,
+        session_ttl_seconds: int = 86400,
+        logout_endpoint: str | None = None,
+        post_logout_redirect_uri: str | None = None,
+    ) -> "FastOIDC":
+        """Creates a FastOIDC instance by auto-discovering endpoints from the IdP discovery document."""
+        discovery_client = DiscoveryClient(discovery_endpoint)
+        doc = discovery_client.get()
+
+        settings = OIDCSettings(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            scopes=scopes,
+            token_endpoint=doc["token_endpoint"],
+            authorization_endpoint=doc["authorization_endpoint"],
+            jwks_endpoint=doc["jwks_uri"],
+            issuer=doc["issuer"],
+            audience=audience or client_id,
+            session_ttl_seconds=session_ttl_seconds,
+            logout_endpoint=logout_endpoint or doc.get("end_session_endpoint"),
+            post_logout_redirect_uri=post_logout_redirect_uri,
+        )
+
+        algorithms = doc.get("id_token_signing_alg_values_supported")
+        return cls(settings, redis_client, session_store, algorithms=algorithms)
+
+
     async def login(
         self,
         login_hint: str | None = None,
         app_state: Any = None,
+        extra_params: dict | None = None,
     ):
         """Initiates the login flow, returning a redirect response and setting a temporary login cookie."""
         data = await self._auth_service.login(
             login_hint=login_hint,
             app_state=app_state,
+            extra_params=extra_params,
         )
         response = RedirectResponse(url=data.login_url)
         response.set_cookie(
@@ -84,7 +131,8 @@ class FastOIDC:
             )
         except AuthenticationError as e:
             raise HTTPException(status_code=401, detail=str(e))
-        except OIDCError:
+        except OIDCError as e:
+            logger.exception("Unexpected error during OIDC callback: %s", e)
             raise HTTPException(status_code=500, detail="Internal server error")
 
         response.set_cookie(
@@ -98,23 +146,37 @@ class FastOIDC:
         return callback_response
 
 
-    async def get_session(self, request: Request):
+    async def get_session(self, request: Request, response: Response | None = None):
         """Retrieves the active session from request cookies, verifying/refreshing it if needed."""
         session_id = request.cookies.get("fastoidc_session")
         if not session_id:
             return None
             
         try:
-            return await self._auth_service.get_session(session_id)
+            session = await self._auth_service.get_session(session_id)
         except AuthenticationError:
             return None
-        except OIDCError:
+        except OIDCError as e:
+            logger.exception("Unexpected error during get session: %s", e)
             raise HTTPException(status_code=500, detail="Internal server error")
 
+        if session and response is not None:
+            remaining = int((session.expires_at - datetime.now(timezone.utc)).total_seconds())
+            response.set_cookie(
+                key="fastoidc_session",
+                value=session_id,
+                max_age=max(remaining, 0),
+                secure=True,
+                httponly=True,
+                samesite="lax",
+            )
 
-    async def require_session(self, request: Request):
+        return session
+
+
+    async def require_session(self, request: Request, response: Response):
         """FastAPI dependency that enforces a valid session, raising 401 if missing or invalid."""
-        session = await self.get_session(request)
+        session = await self.get_session(request, response)
         if not session:
             raise HTTPException(status_code=401, detail="Valid session required")
         return session

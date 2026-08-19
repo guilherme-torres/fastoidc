@@ -20,6 +20,7 @@ class OIDCClient:
         code_challenge_method: str = "S256",
         login_hint: str | None = None,
         state: str | None = None,
+        extra_params: dict | None = None,
     ) -> str:
         """Generates the authorization URL to initiate the OIDC authorization code flow."""
         url_params = {
@@ -35,6 +36,8 @@ class OIDCClient:
         if code_challenge:
             url_params["code_challenge"] = code_challenge
             url_params["code_challenge_method"] = code_challenge_method
+        if extra_params:
+            url_params.update(extra_params)
         return f"{self._settings.authorization_endpoint}?{urlencode(url_params)}"
     
 

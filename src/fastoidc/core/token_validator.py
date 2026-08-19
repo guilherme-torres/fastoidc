@@ -14,11 +14,13 @@ class TokenValidator:
         jwk_client: PyJWKClient,
         issuer: str,
         audience: str,
+        algorithms: list[str] | None = None,
     ):
-        """Initializes the validator with the JWK client, expected issuer, and audience."""
+        """Initializes the validator with the JWK client, expected issuer, audience, and accepted algorithms."""
         self._jwk_client = jwk_client
         self._issuer = issuer
         self._audience = audience
+        self._algorithms = algorithms or ["RS256", "ES256"]
 
 
     def validate(self, id_token: str | None) -> dict[str, Any]:
@@ -32,7 +34,7 @@ class TokenValidator:
             claims = jwt.decode(
                 id_token,
                 signing_key,
-                algorithms=["RS256"],
+                algorithms=self._algorithms,
                 audience=self._audience,
                 issuer=self._issuer,
             )
@@ -50,7 +52,7 @@ class TokenValidator:
             claims = jwt.decode(
                 logout_token,
                 signing_key,
-                algorithms=["RS256"],
+                algorithms=self._algorithms,
                 audience=self._audience,
                 issuer=self._issuer,
             )

@@ -86,6 +86,13 @@ class OIDCSessionService:
         await self._session_store.delete(session_id)
 
 
+    async def touch(self, session: OIDCSession) -> OIDCSession:
+        """Renews the session expiration without modifying tokens."""
+        session.expires_at = datetime.now(timezone.utc) + timedelta(seconds=self._session_ttl_seconds)
+        await self._session_store.update(session)
+        return session
+
+
     async def delete_by_sid(self, sid_hash: str) -> bool:
         """Deletes the session associated with the given IdP session ID hash."""
         return await self._session_store.delete_by_sid(sid_hash)
