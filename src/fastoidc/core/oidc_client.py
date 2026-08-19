@@ -65,7 +65,6 @@ class OIDCClient:
                 )
                 response.raise_for_status()
                 data = response.json()
-                print("tokens:", data)
                 return OIDCTokensResponse(
                     access_token=data.get("access_token"),
                     refresh_token=data.get("refresh_token"),

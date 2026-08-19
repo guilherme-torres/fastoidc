@@ -8,6 +8,7 @@ from jwt import PyJWKClient
 import redis.asyncio as redis
 
 from fastoidc.core.auth_service import OIDCAuthService
+from fastoidc.core.discovery_client import DiscoveryClient
 from fastoidc.core.oidc_client import OIDCClient
 from fastoidc.exceptions import AuthenticationError, OIDCError, SessionNotFoundError
 from fastoidc.core.models import OIDCSettings
@@ -26,12 +27,14 @@ class FastOIDC:
         settings: OIDCSettings,
         redis_client: redis.Redis,
         session_store: OIDCSessionStore,
+        algorithms: list[str] | None = None,
     ):
         """Initializes FastOIDC with setting configurations, Redis, and custom session store."""
         self._token_validator = TokenValidator(
             jwk_client=PyJWKClient(settings.jwks_endpoint, cache_keys=True, lifespan=3600),
             issuer=settings.issuer,
             audience=settings.audience if settings.audience is not None else settings.client_id,
+            algorithms=algorithms,
         )
         self._session_service = OIDCSessionService(
             session_store=session_store,
@@ -43,6 +46,44 @@ class FastOIDC:
             token_validator=self._token_validator,
             session_service=self._session_service,
         )
+
+
+    @classmethod
+    def from_discovery(
+        cls,
+        discovery_endpoint: str,
+        client_id: str,
+        client_secret: str,
+        redirect_uri: str,
+        scopes: str,
+        redis_client: redis.Redis,
+        session_store: OIDCSessionStore,
+        audience: str | None = None,
+        session_ttl_seconds: int = 86400,
+        logout_endpoint: str | None = None,
+        post_logout_redirect_uri: str | None = None,
+    ) -> "FastOIDC":
+        """Creates a FastOIDC instance by auto-discovering endpoints from the IdP discovery document."""
+        discovery_client = DiscoveryClient(discovery_endpoint)
+        doc = discovery_client.get()
+
+        settings = OIDCSettings(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            scopes=scopes,
+            token_endpoint=doc["token_endpoint"],
+            authorization_endpoint=doc["authorization_endpoint"],
+            jwks_endpoint=doc["jwks_uri"],
+            issuer=doc["issuer"],
+            audience=audience or client_id,
+            session_ttl_seconds=session_ttl_seconds,
+            logout_endpoint=logout_endpoint or doc.get("end_session_endpoint"),
+            post_logout_redirect_uri=post_logout_redirect_uri,
+        )
+
+        algorithms = doc.get("id_token_signing_alg_values_supported")
+        return cls(settings, redis_client, session_store, algorithms=algorithms)
 
 
     async def login(

@@ -10,3 +10,5 @@ wheels/
 .venv
 
 .pytest_cache
+
+.env

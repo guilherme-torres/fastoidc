@@ -45,6 +45,7 @@ def _make_fast_oidc():
             scopes="openid profile",
             session_ttl_seconds=3600,
             issuer="https://idp.empresa.com",
+            audience="client-id",
         )
 
         redis_mock = AsyncMock()
@@ -111,36 +112,40 @@ class TestRequireSession:
         fast_oidc = _make_fast_oidc()
         session = _make_session()
         fast_oidc._auth_service.get_session = AsyncMock(return_value=session)
-
+    
         request = MagicMock()
         request.cookies = {"fastoidc_session": "session-id"}
-
-        result = await fast_oidc.require_session(request)
-
+        response = MagicMock()
+    
+        result = await fast_oidc.require_session(request, response)
+    
         assert result == session
 
     @pytest.mark.asyncio
     async def test_raises_401_when_no_cookie(self):
         fast_oidc = _make_fast_oidc()
-
+    
         request = MagicMock()
         request.cookies = {}
-
+        response = MagicMock()
+    
         with pytest.raises(HTTPException) as exc_info:
-            await fast_oidc.require_session(request)
-
+            await fast_oidc.require_session(request, response)
+            
         assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Valid session required"
 
     @pytest.mark.asyncio
     async def test_raises_401_when_session_not_found(self):
         fast_oidc = _make_fast_oidc()
         fast_oidc._auth_service.get_session = AsyncMock(side_effect=SessionNotFoundError())
-
+    
         request = MagicMock()
         request.cookies = {"fastoidc_session": "session-invalida"}
-
+        response = MagicMock()
+    
         with pytest.raises(HTTPException) as exc_info:
-            await fast_oidc.require_session(request)
+            await fast_oidc.require_session(request, response)
 
         assert exc_info.value.status_code == 401
 

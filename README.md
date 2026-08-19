@@ -15,13 +15,44 @@ FastOIDC is a native OIDC/OAuth2 authentication library for FastAPI, focusing on
 pip install fastoidc
 ```
 
-## Basic Usage
+## Configuration
 
-Create your application configuration and initialize the core library instance by linking your Redis connection.
+You must create your application configuration and initialize the core library instance by linking your Redis connection. There are two ways to configure the library:
+
+### Auto-Discovery (Recommended)
+
+Instead of manually defining each endpoint URL, FastOIDC can automatically discover your Identity Provider's endpoints, JSON Web Key Sets (JWKS), and signing algorithms using the `.well-known/openid-configuration` endpoint.
 
 ```python
 import redis.asyncio as redis
-from fastapi import FastAPI, Depends, Request, Response
+from fastoidc import FastOIDC
+from fastoidc.stores import RedisSessionStore
+
+redis_client = redis.Redis.from_url("redis://localhost:6379/0", decode_responses=True)
+session_store = RedisSessionStore(redis_client=redis_client)
+
+
+# Automatically fetches endpoints, JWKS, and supported algorithms:
+auth = FastOIDC.from_discovery(
+    discovery_endpoint="https://accounts.google.com/.well-known/openid-configuration",
+    client_id="your-client-id",
+    client_secret="your-client-secret",
+    redirect_uri="https://your-api.com/auth/callback",
+    scopes="openid profile email",
+    redis_client=redis_client,
+    session_store=session_store,
+    # extra options
+    # session_ttl_seconds=86400,
+    # audience="your-audience", # Defaults to client_id if omitted
+)
+```
+
+### Manual Configuration
+
+If your provider does not support Auto-Discovery or you need full control, you can define all endpoints manually.
+
+```python
+import redis.asyncio as redis
 from fastoidc import FastOIDC, OIDCSettings
 from fastoidc.stores import RedisSessionStore
 
@@ -49,12 +80,21 @@ auth = FastOIDC(
     redis_client=redis_client,
     session_store=session_store,
 )
+```
+
+## Basic Usage
+
+Once configured, link the `auth` object to your FastAPI application routes.
+
+```python
+from fastoidc.core.models import OIDCSession
+from fastapi import FastAPI, Depends, Request, Response
 
 app = FastAPI()
 
 @app.get("/auth/login")
 async def login(redirect_to: str = "/dashboard"):
-    # You can pass an optional app state
+    # You can also pass an optional app_state
     return await auth.login(app_state=redirect_to)
 
 @app.get("/auth/callback")
@@ -136,3 +176,34 @@ async def require_admin(session = Depends(auth.require_session)):
 async def admin_dashboard(session = Depends(require_admin)):
     return {"message": f"Welcome to the admin area, {session.user_info.get('name')}!"}
 ```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### How to Contribute
+
+1. **Fork the repository** and clone your fork locally.
+2. **Create a new branch** for your contribution:
+
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+3. **Install the project dependencies** using `uv`:
+
+   ```bash
+   uv sync
+   ```
+4. **Make your changes** and add or update tests when necessary.
+5. **Run the test suite** to make sure everything is working:
+
+   ```bash
+   uv run pytest
+   ```
+6. **Commit your changes** with a clear and descriptive commit message.
+7. **Push your branch** to your fork:
+
+   ```bash
+   git push origin feature/my-feature
+   ```
+8. **Open a Pull Request** against the `main` branch, describing what was changed and why.
