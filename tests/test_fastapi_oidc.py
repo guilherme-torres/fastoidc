@@ -215,6 +215,54 @@ class TestCallback:
         assert exc_info.value.status_code == 401
 
 
+    @pytest.mark.asyncio
+    async def test_callback_passes_metadata_to_auth_service(self):
+        fast_oidc = _make_fast_oidc()
+        callback_response = MagicMock()
+        callback_response.session_id = "session-id"
+        callback_response.user_info = {"sub": "user-123"}
+        callback_response.app_state = None
+        fast_oidc._auth_service.callback = AsyncMock(return_value=callback_response)
+
+        request = MagicMock()
+        request.query_params.get = lambda key, default=None: {"code": "code-value", "state": "state-value"}.get(key)
+        request.cookies = {"fastoidc_login": "login-sid"}
+        response = MagicMock()
+
+        metadata = {"ip": "127.0.0.1", "login_at": "2026-09-04T10:00:00Z"}
+        await fast_oidc.callback(request, response, metadata=metadata)
+
+        fast_oidc._auth_service.callback.assert_called_once_with(
+            code="code-value",
+            state="state-value",
+            login_session_id="login-sid",
+            metadata=metadata,
+        )
+
+    @pytest.mark.asyncio
+    async def test_callback_defaults_metadata_to_none(self):
+        fast_oidc = _make_fast_oidc()
+        callback_response = MagicMock()
+        callback_response.session_id = "session-id"
+        callback_response.user_info = {"sub": "user-123"}
+        callback_response.app_state = None
+        fast_oidc._auth_service.callback = AsyncMock(return_value=callback_response)
+
+        request = MagicMock()
+        request.query_params.get = lambda key, default=None: {"code": "code-value", "state": "state-value"}.get(key)
+        request.cookies = {"fastoidc_login": "login-sid"}
+        response = MagicMock()
+
+        await fast_oidc.callback(request, response)
+
+        fast_oidc._auth_service.callback.assert_called_once_with(
+            code="code-value",
+            state="state-value",
+            login_session_id="login-sid",
+            metadata=None,
+        )
+
+
 class TestLogout:
     @pytest.mark.asyncio
     async def test_logout_redirects_and_deletes_session_and_cookie(self):

@@ -152,7 +152,7 @@ class FastOIDC:
         return response
 
 
-    async def callback(self, request: Request, response: Response):
+    async def callback(self, request: Request, response: Response, metadata: Dict[str, Any] | None = None):
         """Handles the OIDC callback, validates state/session, sets session cookie, and returns callback response."""
         code = request.query_params.get("code")
         state = request.query_params.get("state")
@@ -169,7 +169,7 @@ class FastOIDC:
         
         try:
             callback_response = await self._auth_service.callback(
-                code=code, state=state, login_session_id=login_session_id
+                code=code, state=state, login_session_id=login_session_id, metadata=metadata
             )
         except AuthenticationError as e:
             raise HTTPException(status_code=401, detail=str(e))

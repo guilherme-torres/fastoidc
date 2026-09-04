@@ -90,7 +90,8 @@ class OIDCAuthService:
         self,
         code: str,
         state: str,
-        login_session_id: str
+        login_session_id: str,
+        metadata: dict[str, Any] | None = None,
     ):
         """Handles OIDC callback parameters, validates state and PKCE, and constructs the user session."""
         session_key = hash_string(login_session_id)
@@ -121,7 +122,7 @@ class OIDCAuthService:
         session = await self._session_service.create(
             tokens=tokens,
             user_info=user_info,
-            metadata=None,
+            metadata=metadata,
             sid=sid,
         )
         

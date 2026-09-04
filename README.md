@@ -140,21 +140,32 @@ async def welcome(session: OIDCSession | None = Depends(auth.get_session)):
 
 ## Using Session Metadata
 
-The `OIDCSession` object includes a `metadata` dictionary field that you can use to attach custom data (like tenant IDs, roles, or permissions) to an active session.
-
-Since you instantiate the `session_store` directly in your application, you can persist any changes by calling the store's update method:
+The `OIDCSession` has a `metadata` dictionary that persists across requests. Use it to store data resolved once at login time (e.g., tenant, roles, plan) so it's available in subsequent requests without re-querying the IdP or database.
 
 ```python
-@app.post("/auth/roles")
-async def update_roles(session = Depends(auth.require_session)):
-    if not session.metadata:
-        session.metadata = {}
+from fastoidc.core.models import OIDCSession
+from fastapi import Depends
 
-    session.metadata["roles"] = ["admin", "editor"]
+@app.get("/auth/callback")
+async def callback(request: Request, response: Response):
+    callback_result = await auth.callback(request, response)
 
+    # Resolve tenant once at login
+    email = callback_result.user_info.get("email", "")
+    tenant = await resolve_tenant(email)
+
+    # Persist in session store
+    session = await session_store.get(callback_result.session_id)
+    session.metadata = {"tenant_id": tenant.id, "plan": tenant.plan}
     await session_store.update(session)
 
-    return {"status": "roles updated"}
+    return {"state": callback_result.app_state}
+
+@app.get("/dashboard")
+async def dashboard(session: OIDCSession = Depends(auth.require_session)):
+    tenant_id = session.metadata.get("tenant_id")
+    items = await db.items.find(tenant_id=tenant_id)
+    return {"items": items}
 ```
 
 ## Custom Authentication Dependencies

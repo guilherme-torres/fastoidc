@@ -221,6 +221,50 @@ class TestCallback:
 
         deps["redis_client"].delete.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_callback_passes_metadata_to_session_service_create(self):
+        service, deps = _make_service()
+
+        csrf_token = "csrf-valido"
+        session_data = json.dumps({
+            "csrf_token": csrf_token,
+            "code_verifier": "verifier",
+            "app_state": None,
+        })
+        deps["redis_client"].get = AsyncMock(return_value=session_data)
+        deps["redis_client"].delete = AsyncMock()
+        deps["oidc_client"].get_tokens = AsyncMock(return_value=_make_tokens())
+        deps["token_validator"].validate.return_value = _make_user_info(sid="idp-session-id")
+        deps["session_service"].create = AsyncMock(return_value=_make_session())
+
+        metadata = {"ip": "192.168.1.100", "user_agent": "Mozilla/5.0"}
+        await service.callback(code="code", state=csrf_token, login_session_id="login-sid", metadata=metadata)
+
+        deps["session_service"].create.assert_called_once()
+        call_kwargs = deps["session_service"].create.call_args
+        assert call_kwargs.kwargs.get("metadata") == metadata
+
+    @pytest.mark.asyncio
+    async def test_callback_defaults_metadata_to_none(self):
+        service, deps = _make_service()
+
+        csrf_token = "csrf-valido"
+        session_data = json.dumps({
+            "csrf_token": csrf_token,
+            "code_verifier": "verifier",
+            "app_state": None,
+        })
+        deps["redis_client"].get = AsyncMock(return_value=session_data)
+        deps["redis_client"].delete = AsyncMock()
+        deps["oidc_client"].get_tokens = AsyncMock(return_value=_make_tokens())
+        deps["token_validator"].validate.return_value = _make_user_info(sid="idp-session-id")
+        deps["session_service"].create = AsyncMock(return_value=_make_session())
+
+        await service.callback(code="code", state=csrf_token, login_session_id="login-sid")
+
+        call_kwargs = deps["session_service"].create.call_args
+        assert call_kwargs.kwargs.get("metadata") is None
+
 
 class TestGetSession:
     @pytest.mark.asyncio
