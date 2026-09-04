@@ -1,5 +1,7 @@
 # FastOIDC
 
+[![Tests](https://github.com/guilherme-torres/fastoidc/actions/workflows/tests.yml/badge.svg)](https://github.com/guilherme-torres/fastoidc/actions/workflows/tests.yml) [![Publish to PyPi](https://github.com/guilherme-torres/fastoidc/actions/workflows/publish-to-pypi.yml/badge.svg)](https://github.com/guilherme-torres/fastoidc/actions/workflows/publish-to-pypi.yml)
+
 FastOIDC is a native OIDC/OAuth2 authentication library for FastAPI, focusing on security, high performance, and scalability. It implements the Authorization Code flow with PKCE and stores session states using Redis.
 
 ## Core Features
@@ -59,7 +61,7 @@ auth = FastOIDC.from_discovery(
 )
 ```
 
-### Manual Configuration / Pure OAuth2
+### Manual Configuration
 
 If your provider does not support Auto-Discovery (e.g., pure OAuth2 providers like GitHub that don't implement OIDC or `.well-known` endpoints), you can use `from_config` to explicitly define endpoints. For providers that don't issue an `id_token`, you can provide a `userinfo_endpoint` to automatically fetch user data.
 
