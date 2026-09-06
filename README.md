@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/guilherme-torres/fastoidc/actions/workflows/tests.yml/badge.svg)](https://github.com/guilherme-torres/fastoidc/actions/workflows/tests.yml) [![Publish to PyPi](https://github.com/guilherme-torres/fastoidc/actions/workflows/publish-to-pypi.yml/badge.svg)](https://github.com/guilherme-torres/fastoidc/actions/workflows/publish-to-pypi.yml)
 
-FastOIDC is a native OIDC/OAuth2 authentication library for FastAPI, focusing on security, high performance, and scalability. It implements the Authorization Code flow with PKCE and stores session states using Redis.
+FastOIDC is a native OAuth/OIDC library for FastAPI, focusing on security, high performance, and scalability. It implements the Authorization Code flow with PKCE and stores session states using Redis.
 
 ## Core Features
 
